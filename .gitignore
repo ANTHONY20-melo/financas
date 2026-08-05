@@ -4,6 +4,7 @@
 android.keystore
 *.apk
 *.aab
+*.idsig
 
 # Generated Android project directories
 app/

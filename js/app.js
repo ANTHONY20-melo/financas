@@ -79,7 +79,8 @@ const App = (() => {
 
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
-    toast.innerHTML = `<i class="${icons[type] || icons.success}"></i> ${message}`;
+    // Zero-trust: mensagens podem conter dados do usuário (nomes de categoria etc.) → escapa
+    toast.innerHTML = `<i class="${icons[type] || icons.success}"></i> ${esc(message)}`;
     container.appendChild(toast);
 
     setTimeout(() => {
@@ -505,11 +506,11 @@ const App = (() => {
     catSelect.innerHTML = '<option value="all">Todas as categorias</option>' +
       allCats.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
 
-    // Populate month filter
+    // Populate month filter (valor completo YYYY-MM → filtra ano+mês, não só mês)
     const monthSelect = $('#transactionMonthFilter');
     const months = getMonthOptions();
     monthSelect.innerHTML = '<option value="all">Todos os meses</option>' +
-      months.map(m => `<option value="${m.value.split('-')[1]}">${m.label}</option>`).join('');
+      months.map(m => `<option value="${m.value}">${m.label}</option>`).join('');
 
     // Event listeners
     $('#transactionSearch').addEventListener('input', renderTransactions);
@@ -801,9 +802,14 @@ const App = (() => {
                 <i class="${safeIcon(b.categoryIcon)}"></i>
                 ${esc(b.categoryName)}
               </div>
-              <div class="budget-item-values">
-                <strong class="${remainingClass}">${formatCurrency(b.spent)}</strong>
-                <span class="text-muted">/ ${formatCurrency(b.amount)}</span>
+              <div class="budget-item-header-actions">
+                <div class="budget-item-values">
+                  <strong class="${remainingClass}">${formatCurrency(b.spent)}</strong>
+                  <span class="text-muted">/ ${formatCurrency(b.amount)}</span>
+                </div>
+                <button class="btn-delete budget-delete-btn" data-id="${b.id}" title="Excluir orçamento" aria-label="Excluir orçamento">
+                  <i class="fas fa-trash-alt"></i>
+                </button>
               </div>
             </div>
             <div class="budget-item-bar">
@@ -1662,6 +1668,17 @@ const App = (() => {
       catSelect.innerHTML = '<option value="">Selecione...</option>' +
         cats.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
     });
+    // Categorização automática: ao digitar a descrição, sugere categoria do histórico
+    $('#transactionDescription').addEventListener('input', (e) => {
+      const catSelect = $('#transactionCategory');
+      if (catSelect.value !== '') return; // usuário já escolheu → não sobrescrever
+      const suggestion = DB.suggestCategory(e.target.value, $('#transactionType').value);
+      if (!suggestion) return;
+      catSelect.value = suggestion.categoryId;
+      if (suggestion.categoryName) {
+        showToast(`Categoria sugerida: ${suggestion.categoryName}`, 'warning', 2500);
+      }
+    });
 
     // --- Category ---
     $('#addCategoryBtn').addEventListener('click', () => openCategoryModal());
@@ -1670,6 +1687,7 @@ const App = (() => {
     // --- Budget ---
     $('#addBudgetBtn').addEventListener('click', () => openBudgetModal());
     $('#budgetForm').addEventListener('submit', saveBudget);
+    setupBudgetActions();
 
     // --- Goal ---
     $('#addGoalBtn').addEventListener('click', () => openGoalModal());

@@ -191,9 +191,16 @@ const DB = (() => {
     }
 
     if (month && month !== 'all') {
+      // month pode vir como 'YYYY-MM' (completo) ou 'MM' (legado)
+      const monthStr = String(month);
       transactions = transactions.filter(t => {
+        if (monthStr.length === 7) {
+          return t.date.slice(0, 7) === monthStr; // '2026-03' casa exatamente
+        }
         const d = new Date(t.date + 'T00:00:00');
-        return d.getMonth() + 1 === parseInt(month);
+        // Legado: só o mês 'MM' — assume o ano informado ou o ano ATUAL (não o da transação)
+        const wantYear = year && year !== 'all' ? parseInt(year) : new Date().getFullYear();
+        return d.getMonth() + 1 === parseInt(month) && d.getFullYear() === wantYear;
       });
     }
 
@@ -226,6 +233,63 @@ const DB = (() => {
   function getCategoryName(id) {
     const cat = getCategory(id);
     return cat ? cat.name : 'Sem categoria';
+  }
+
+  // --- Categorização automática (P1) ---
+  // Sugere a categoria mais provável para uma descrição, aprendendo do
+  // histórico: 1º tenta descrição idêntica normalizada; 2º palavras-chave.
+  function normalizeText(str) {
+    return String(str || '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '') // remove acentos
+      .replace(/[^a-z0-9 ]/g, ' ')      // pontuação vira espaço
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  function suggestCategory(description, type) {
+    const normalized = normalizeText(description);
+    if (!normalized) return null;
+
+    const transactions = getTransactions().filter(t => !type || t.type === type);
+
+    // 1º: descrição idêntica (normalizada) no histórico → categoria mais frequente
+    const exact = transactions.filter(t => normalizeText(t.description) === normalized);
+    if (exact.length > 0) {
+      return mostFrequentCategory(exact);
+    }
+
+    // 2º: palavras-chave compartilhadas (palavras com 3+ chars)
+    const words = normalized.split(' ').filter(w => w.length >= 3);
+    if (words.length === 0) return null;
+
+    const candidates = transactions.filter(t => {
+      const tWords = normalizeText(t.description).split(' ').filter(w => w.length >= 3);
+      return tWords.some(w => words.includes(w));
+    });
+
+    if (candidates.length === 0) return null;
+    return mostFrequentCategory(candidates);
+  }
+
+  // Retorna a categoria mais usada entre as transações (desempate: mais recente)
+  function mostFrequentCategory(transactions) {
+    const counts = {};
+    transactions.forEach(t => {
+      if (!t.category) return;
+      counts[t.category] = (counts[t.category] || 0) + 1;
+    });
+
+    const sorted = Object.entries(counts).sort((a, b) => {
+      if (b[1] !== a[1]) return b[1] - a[1]; // mais frequente
+      return 0;
+    });
+
+    if (sorted.length === 0) return null;
+    const categoryId = sorted[0][0];
+    const cat = getCategory(categoryId);
+    return cat ? { categoryId, categoryName: cat.name } : null;
   }
 
   function addCategory(data) {
@@ -824,25 +888,120 @@ const DB = (() => {
     };
   }
 
+  // --- Import seguro (zero trust) ---
+  // Sanitiza cada item ANTES de gravar: itens malformados são descartados
+  // e contabilizados. Se uma coleção inteira for inválida, o import falha
+  // (não pode substituir os dados atuais por lixo silenciosamente).
+
+  const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+  const MONTH_RE = /^\d{4}-\d{2}$/;
+  const TYPES = ['income', 'expense'];
+
+  function sanitizeTransaction(t) {
+    if (!t || typeof t !== 'object') return null;
+    const amount = Number(t.amount);
+    if (!t.id || typeof t.description !== 'string' || !t.description.trim()) return null;
+    if (!Number.isFinite(amount) || amount <= 0) return null;
+    if (TYPES.indexOf(t.type) === -1) return null;
+    if (typeof t.category !== 'string' || !t.category) return null;
+    if (typeof t.date !== 'string' || !DATE_RE.test(t.date)) return null;
+    return {
+      id: String(t.id),
+      description: t.description.trim(),
+      amount,
+      type: t.type,
+      category: t.category,
+      date: t.date,
+      notes: typeof t.notes === 'string' ? t.notes.trim() : '',
+      createdAt: typeof t.createdAt === 'string' ? t.createdAt : new Date().toISOString(),
+    };
+  }
+
+  function sanitizeCategory(c) {
+    if (!c || typeof c !== 'object') return null;
+    if (!c.id || typeof c.name !== 'string' || !c.name.trim()) return null;
+    if (TYPES.indexOf(c.type) === -1) return null;
+    return {
+      id: String(c.id),
+      name: c.name.trim(),
+      type: c.type,
+      icon: typeof c.icon === 'string' && c.icon ? c.icon : 'fa-solid fa-tag',
+    };
+  }
+
+  function sanitizeBudget(b) {
+    if (!b || typeof b !== 'object') return null;
+    const amount = Number(b.amount);
+    if (!b.id || typeof b.categoryId !== 'string' || !b.categoryId) return null;
+    if (typeof b.month !== 'string' || !MONTH_RE.test(b.month)) return null;
+    if (!Number.isFinite(amount) || amount <= 0) return null;
+    return {
+      id: String(b.id),
+      categoryId: b.categoryId,
+      month: b.month,
+      amount,
+    };
+  }
+
+  function sanitizeGoal(g) {
+    if (!g || typeof g !== 'object') return null;
+    const target = Number(g.target);
+    const current = Number(g.current) || 0;
+    if (!g.id || typeof g.name !== 'string' || !g.name.trim()) return null;
+    if (!Number.isFinite(target) || target <= 0) return null;
+    if (g.deadline !== null && g.deadline !== undefined && !MONTH_RE.test(String(g.deadline))) return null;
+    return {
+      id: String(g.id),
+      name: g.name.trim(),
+      target,
+      current: Math.max(0, current),
+      deadline: g.deadline || null,
+      icon: typeof g.icon === 'string' && g.icon ? g.icon : 'fa-solid fa-piggy-bank',
+      createdAt: typeof g.createdAt === 'string' ? g.createdAt : new Date().toISOString(),
+    };
+  }
+
   function importAllData(data) {
-    if (!data || !data.version) {
+    if (!data || typeof data !== 'object' || !data.version) {
       return { success: false, error: 'Arquivo inválido.' };
     }
 
-    if (data.transactions && Array.isArray(data.transactions)) {
-      Storage.set(TRANSACTIONS_KEY, data.transactions);
-    }
-    if (data.categories && Array.isArray(data.categories)) {
-      Storage.set(CATEGORIES_KEY, data.categories);
-    }
-    if (data.budgets && Array.isArray(data.budgets)) {
-      Storage.set(BUDGETS_KEY, data.budgets);
-    }
-    if (data.goals && Array.isArray(data.goals)) {
-      Storage.set(GOALS_KEY, data.goals);
+    let ignored = 0;
+    const clean = {};
+
+    // Cada coleção: se presente, sanitiza itens; itens inválidos são descartados
+    ['transactions', 'categories', 'budgets', 'goals'].forEach(key => {
+      if (data[key] === undefined || data[key] === null) return;
+      if (!Array.isArray(data[key])) {
+        clean[key] = null;
+        return;
+      }
+      const sanitizer = key === 'transactions' ? sanitizeTransaction
+        : key === 'categories' ? sanitizeCategory
+        : key === 'budgets' ? sanitizeBudget
+        : sanitizeGoal;
+      const valid = data[key].map(sanitizer).filter(Boolean);
+      ignored += data[key].length - valid.length;
+      clean[key] = valid;
+    });
+
+    // Falha se alguma coleção presente ficou vazia mas o backup tinha itens
+    const failed = Object.keys(clean).filter(key =>
+      clean[key] !== null && clean[key].length === 0 && Array.isArray(data[key]) && data[key].length > 0
+    );
+    if (failed.length > 0) {
+      return {
+        success: false,
+        error: `Dados inválidos em "${failed[0]}": nenhum item válido encontrado.`,
+      };
     }
 
-    return { success: true };
+    if (clean.transactions !== null) Storage.set(TRANSACTIONS_KEY, clean.transactions);
+    if (clean.categories !== null) Storage.set(CATEGORIES_KEY, clean.categories);
+    if (clean.budgets !== null) Storage.set(BUDGETS_KEY, clean.budgets);
+    if (clean.goals !== null) Storage.set(GOALS_KEY, clean.goals);
+
+    return { success: true, ignored };
   }
 
   function exportToCSV(transactions) {
@@ -874,6 +1033,7 @@ const DB = (() => {
     getCategoriesByType,
     getCategory,
     getCategoryName,
+    suggestCategory,
     addCategory,
     updateCategory,
     deleteCategory,
