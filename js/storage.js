@@ -57,6 +57,7 @@ const DB = (() => {
   const CATEGORIES_KEY = 'categories';
   const BUDGETS_KEY = 'budgets';
   const GOALS_KEY = 'goals';
+  const RECURRING_KEY = 'recurring';
 
   // --- Default Categories ---
   const DEFAULT_CATEGORIES = [
@@ -93,6 +94,9 @@ const DB = (() => {
     }
     if (!Storage.get(GOALS_KEY)) {
       Storage.set(GOALS_KEY, []);
+    }
+    if (!Storage.get(RECURRING_KEY)) {
+      Storage.set(RECURRING_KEY, []);
     }
   }
 
@@ -433,6 +437,241 @@ const DB = (() => {
     }
     Storage.set(BUDGETS_KEY, filtered);
     return { success: true };
+  }
+
+  // --- Recurring (transações recorrentes) ---
+  // Recorrentes são "modelos" de lançamentos que se repetem. Elas NÃO viram
+  // transações automaticamente: o usuário gera a transação do mês quando quiser
+  // (botão "Lançar"). A deduplicação usa a marcação `recurringId + recurringDate`
+  // na transação — o mesmo vencimento nunca é lançado duas vezes.
+
+  function getRecurring() {
+    return Storage.get(RECURRING_KEY, []);
+  }
+
+  function getRecurringById(id) {
+    return getRecurring().find(r => r.id === id) || null;
+  }
+
+  function addRecurring(data) {
+    const rawAmount = parseFloat(data.amount);
+    const day = parseInt(data.day, 10);
+
+    if (!data.description || !data.description.trim()) {
+      return { success: false, error: 'Descrição é obrigatória.' };
+    }
+    // Zero-trust: valida o valor BRUTO antes de normalizar
+    if (!Number.isFinite(rawAmount) || rawAmount <= 0) {
+      return { success: false, error: 'O valor deve ser maior que zero.' };
+    }
+    if (!data.category) {
+      return { success: false, error: 'Selecione uma categoria.' };
+    }
+    if (RECURRING_FREQUENCIES.indexOf(data.frequency) === -1) {
+      return { success: false, error: 'Frequência inválida.' };
+    }
+    const maxDay = data.frequency === 'weekly' ? 6 : 31;
+    const minDay = data.frequency === 'weekly' ? 0 : 1;
+    if (!Number.isInteger(day) || day < minDay || day > maxDay) {
+      return { success: false, error: data.frequency === 'weekly'
+        ? 'Dia da semana inválido (0 = domingo, 6 = sábado).'
+        : 'Dia do mês inválido (1 a 31).' };
+    }
+
+    const recurring = getRecurring();
+    const rec = {
+      id: 'rec_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+      description: data.description.trim(),
+      amount: Math.abs(rawAmount),
+      type: data.type,
+      category: data.category,
+      frequency: data.frequency,
+      day,
+      startDate: data.startDate || null,
+      active: data.active !== false,
+      notes: data.notes ? data.notes.trim() : '',
+      createdAt: new Date().toISOString(),
+    };
+    recurring.push(rec);
+    Storage.set(RECURRING_KEY, recurring);
+    return { success: true, recurring: rec };
+  }
+
+  function updateRecurring(id, data) {
+    const recurring = getRecurring();
+    const index = recurring.findIndex(r => r.id === id);
+    if (index === -1) return { success: false, error: 'Recorrente não encontrada.' };
+
+    const rawAmount = parseFloat(data.amount);
+    const day = parseInt(data.day, 10);
+
+    if (!data.description || !data.description.trim()) {
+      return { success: false, error: 'Descrição é obrigatória.' };
+    }
+    if (!Number.isFinite(rawAmount) || rawAmount <= 0) {
+      return { success: false, error: 'O valor deve ser maior que zero.' };
+    }
+    if (RECURRING_FREQUENCIES.indexOf(data.frequency) === -1) {
+      return { success: false, error: 'Frequência inválida.' };
+    }
+    const maxDay = data.frequency === 'weekly' ? 6 : 31;
+    const minDay = data.frequency === 'weekly' ? 0 : 1;
+    if (!Number.isInteger(day) || day < minDay || day > maxDay) {
+      return { success: false, error: data.frequency === 'weekly'
+        ? 'Dia da semana inválido (0 = domingo, 6 = sábado).'
+        : 'Dia do mês inválido (1 a 31).' };
+    }
+
+    recurring[index] = {
+      ...recurring[index],
+      description: data.description.trim(),
+      amount: Math.abs(rawAmount),
+      type: data.type,
+      category: data.category,
+      frequency: data.frequency,
+      day,
+      startDate: data.startDate || recurring[index].startDate,
+      active: data.active !== false,
+      notes: data.notes ? data.notes.trim() : '',
+    };
+    Storage.set(RECURRING_KEY, recurring);
+    return { success: true, recurring: recurring[index] };
+  }
+
+  function deleteRecurring(id) {
+    const recurring = getRecurring();
+    const filtered = recurring.filter(r => r.id !== id);
+    if (filtered.length === recurring.length) {
+      return { success: false, error: 'Recorrente não encontrada.' };
+    }
+    Storage.set(RECURRING_KEY, filtered);
+    return { success: true };
+  }
+
+  // --- Datas de vencimento (lógica pura, testável) ---
+
+  // Converte 'YYYY-MM-DD' em Date LOCAL (sem UTC — lição de fuso do getTodayStr)
+  function parseLocalDate(dateStr) {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    return new Date(y, m - 1, d);
+  }
+
+  function formatLocalDate(date) {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+
+  function getDaysInMonth(year, monthIndex) {
+    return new Date(year, monthIndex + 1, 0).getDate();
+  }
+
+  function clampDay(year, monthIndex, day) {
+    return Math.min(day, getDaysInMonth(year, monthIndex));
+  }
+
+  // Próxima ocorrência mensal: dia `day` de cada mês (último dia se 31 > dias do mês)
+  function nextMonthlyDate(rec, from) {
+    let y = from.getFullYear();
+    let m = from.getMonth();
+    for (let i = 0; i < 48; i++) {
+      const candidate = new Date(y, m, clampDay(y, m, rec.day));
+      if (candidate >= from) return candidate;
+      m++;
+      if (m > 11) { m = 0; y++; }
+    }
+    return null;
+  }
+
+  // Próxima ocorrência semanal: dia da semana `day` (0=Dom..6=Sáb), âncora = startDate
+  function nextWeeklyDate(rec, from) {
+    const anchor = rec.startDate ? parseLocalDate(rec.startDate) : new Date();
+    const start = anchor > from ? anchor : from;
+    const diff = (rec.day - start.getDay() + 7) % 7;
+    return new Date(start.getFullYear(), start.getMonth(), start.getDate() + diff);
+  }
+
+  // Próxima ocorrência anual: dia `day` do mês da startDate (ou mês atual), todo ano
+  function nextYearlyDate(rec, from) {
+    const anchor = rec.startDate ? parseLocalDate(rec.startDate) : new Date();
+    const monthIndex = anchor.getMonth();
+    for (let y = from.getFullYear(); y <= from.getFullYear() + 3; y++) {
+      const candidate = new Date(y, monthIndex, clampDay(y, monthIndex, rec.day));
+      if (candidate >= from) return candidate;
+    }
+    return null;
+  }
+
+  // Próxima data de vencimento de uma recorrente a partir de `fromDate` (Date local)
+  function getNextRecurringDate(rec, fromDate) {
+    const from = fromDate || new Date();
+    if (rec.frequency === 'weekly') return formatLocalDate(nextWeeklyDate(rec, from));
+    if (rec.frequency === 'yearly') return formatLocalDate(nextYearlyDate(rec, from));
+    return formatLocalDate(nextMonthlyDate(rec, from));
+  }
+
+  // Próximas ocorrências de TODAS as recorrentes ativas até `monthsAhead` meses.
+  // Retorna [{ recurring, occurrences: [{ date, month, weekday }] }]
+  function getUpcomingRecurring(monthsAhead = 3, refDateStr) {
+    const ref = refDateStr ? parseLocalDate(refDateStr) : new Date();
+    const horizon = new Date(ref.getFullYear(), ref.getMonth() + monthsAhead, 0); // fim do mês limite
+    const recs = getRecurring().filter(r => r.active);
+
+    return recs.map(rec => {
+      const occurrences = [];
+      let cursor = ref;
+      let guard = 0;
+      let next = getNextRecurringDate(rec, cursor);
+      while (next && guard < 60) {
+        const d = parseLocalDate(next);
+        if (d > horizon) break;
+        occurrences.push({
+          date: next,
+          month: next.slice(0, 7),
+          weekday: d.getDay(),
+        });
+        cursor = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1);
+        next = getNextRecurringDate(rec, cursor);
+        guard++;
+      }
+      return { recurring: rec, occurrences };
+    });
+  }
+
+  // Gera UMA transação real a partir da recorrente no mês informado ('YYYY-MM').
+  // Deduplica por recurringId + recurringDate: o mesmo vencimento nunca duplica.
+  function generateRecurringTransaction(recId, monthStr) {
+    const rec = getRecurringById(recId);
+    if (!rec) return { success: false, error: 'Recorrente não encontrada.' };
+    if (!rec.active) return { success: false, error: 'Recorrente está inativa.' };
+
+    const dueDate = getNextRecurringDate(rec, parseLocalDate(monthStr + '-01'));
+    if (!dueDate || dueDate.slice(0, 7) !== monthStr) {
+      return { success: false, error: 'Esta recorrente não tem vencimento neste mês.' };
+    }
+
+    const transactions = getTransactions();
+    const existing = transactions.find(t => t.recurringId === rec.id && t.recurringDate === dueDate);
+    if (existing) {
+      return { success: false, error: `Já lançada em ${dueDate}.` };
+    }
+
+    const transaction = {
+      id: 'txn_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+      description: rec.description,
+      amount: rec.amount,
+      type: rec.type,
+      category: rec.category,
+      date: dueDate,
+      notes: rec.notes || '',
+      createdAt: new Date().toISOString(),
+      recurringId: rec.id,
+      recurringDate: dueDate,
+    };
+    transactions.push(transaction);
+    saveTransactions(transactions);
+    return { success: true, transaction };
   }
 
   // --- Aggregations ---
@@ -883,8 +1122,9 @@ const DB = (() => {
       categories: getCategories(),
       budgets: getBudgets(),
       goals: getGoals(),
+      recurring: getRecurring(),
       exportedAt: new Date().toISOString(),
-      version: '2.0',
+      version: '2.1',
     };
   }
 
@@ -896,6 +1136,7 @@ const DB = (() => {
   const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
   const MONTH_RE = /^\d{4}-\d{2}$/;
   const TYPES = ['income', 'expense'];
+  const RECURRING_FREQUENCIES = ['monthly', 'weekly', 'yearly'];
 
   function sanitizeTransaction(t) {
     if (!t || typeof t !== 'object') return null;
@@ -905,7 +1146,7 @@ const DB = (() => {
     if (TYPES.indexOf(t.type) === -1) return null;
     if (typeof t.category !== 'string' || !t.category) return null;
     if (typeof t.date !== 'string' || !DATE_RE.test(t.date)) return null;
-    return {
+    const clean = {
       id: String(t.id),
       description: t.description.trim(),
       amount,
@@ -915,6 +1156,10 @@ const DB = (() => {
       notes: typeof t.notes === 'string' ? t.notes.trim() : '',
       createdAt: typeof t.createdAt === 'string' ? t.createdAt : new Date().toISOString(),
     };
+    // Marcação opcional de recorrente (preservada no backup)
+    if (typeof t.recurringId === 'string' && t.recurringId) clean.recurringId = t.recurringId;
+    if (typeof t.recurringDate === 'string' && DATE_RE.test(t.recurringDate)) clean.recurringDate = t.recurringDate;
+    return clean;
   }
 
   function sanitizeCategory(c) {
@@ -961,6 +1206,33 @@ const DB = (() => {
     };
   }
 
+  function sanitizeRecurring(r) {
+    if (!r || typeof r !== 'object') return null;
+    const amount = Number(r.amount);
+    const day = Number(r.day);
+    if (!r.id || typeof r.description !== 'string' || !r.description.trim()) return null;
+    if (!Number.isFinite(amount) || amount <= 0) return null;
+    if (TYPES.indexOf(r.type) === -1) return null;
+    if (typeof r.category !== 'string' || !r.category) return null;
+    if (RECURRING_FREQUENCIES.indexOf(r.frequency) === -1) return null;
+    if (!Number.isInteger(day) || day < 0 || day > 31) return null;
+    if (r.startDate !== null && r.startDate !== undefined &&
+      (typeof r.startDate !== 'string' || !DATE_RE.test(r.startDate))) return null;
+    return {
+      id: String(r.id),
+      description: r.description.trim(),
+      amount,
+      type: r.type,
+      category: r.category,
+      frequency: r.frequency,
+      day,
+      startDate: r.startDate || null,
+      active: r.active !== false,
+      notes: typeof r.notes === 'string' ? r.notes.trim() : '',
+      createdAt: typeof r.createdAt === 'string' ? r.createdAt : new Date().toISOString(),
+    };
+  }
+
   function importAllData(data) {
     if (!data || typeof data !== 'object' || !data.version) {
       return { success: false, error: 'Arquivo inválido.' };
@@ -970,7 +1242,7 @@ const DB = (() => {
     const clean = {};
 
     // Cada coleção: se presente, sanitiza itens; itens inválidos são descartados
-    ['transactions', 'categories', 'budgets', 'goals'].forEach(key => {
+    ['transactions', 'categories', 'budgets', 'goals', 'recurring'].forEach(key => {
       if (data[key] === undefined || data[key] === null) return;
       if (!Array.isArray(data[key])) {
         clean[key] = null;
@@ -979,7 +1251,8 @@ const DB = (() => {
       const sanitizer = key === 'transactions' ? sanitizeTransaction
         : key === 'categories' ? sanitizeCategory
         : key === 'budgets' ? sanitizeBudget
-        : sanitizeGoal;
+        : key === 'goals' ? sanitizeGoal
+        : sanitizeRecurring;
       const valid = data[key].map(sanitizer).filter(Boolean);
       ignored += data[key].length - valid.length;
       clean[key] = valid;
@@ -1000,6 +1273,7 @@ const DB = (() => {
     if (clean.categories !== null) Storage.set(CATEGORIES_KEY, clean.categories);
     if (clean.budgets !== null) Storage.set(BUDGETS_KEY, clean.budgets);
     if (clean.goals !== null) Storage.set(GOALS_KEY, clean.goals);
+    if (clean.recurring !== null) Storage.set(RECURRING_KEY, clean.recurring);
 
     return { success: true, ignored };
   }
@@ -1044,6 +1318,15 @@ const DB = (() => {
     updateBudget,
     deleteBudget,
     getBudgetProgress,
+    // Recurring
+    getRecurring,
+    getRecurringById,
+    addRecurring,
+    updateRecurring,
+    deleteRecurring,
+    getNextRecurringDate,
+    getUpcomingRecurring,
+    generateRecurringTransaction,
     // Goals
     getGoals,
     addGoal,

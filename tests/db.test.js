@@ -213,8 +213,9 @@ test('orçamento pode ser atualizado e excluído', () => {
 test('exportAllData/importAllData faz roundtrip preservando dados', () => {
   DB.addTransaction({ description: 'Salário', amount: 5000, type: 'income', category: 'cat_salario', date: '2026-08-05' });
   const exported = DB.exportAllData();
-  assert.equal(exported.version, '2.0');
+  assert.equal(exported.version, '2.1');
   assert.equal(exported.transactions.length, 1);
+  assert.ok(Array.isArray(exported.recurring), 'export deve incluir a coleção recurring');
 
   reset(); // limpa tudo e re-inicializa (categorias padrão voltam)
   const imported = DB.importAllData(exported);

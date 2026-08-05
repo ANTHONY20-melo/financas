@@ -233,7 +233,7 @@ test('exportAllData inclui metas no roundtrip', () => {
   DB.addGoal({ name: 'Reserva', target: 5000, current: 2000 });
   const exported = DB.exportAllData();
   assert.equal(exported.goals.length, 1);
-  assert.equal(exported.version, '2.0');
+  assert.equal(exported.version, '2.1');
 
   reset();
   const imported = DB.importAllData(exported);

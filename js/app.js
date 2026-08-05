@@ -172,6 +172,7 @@ const App = (() => {
       transacoes: { title: 'Transações', subtitle: 'Gerencie suas receitas e despesas' },
       categorias: { title: 'Categorias', subtitle: 'Organize suas categorias financeiras' },
       orcamentos: { title: 'Orçamentos', subtitle: 'Defina limites mensais por categoria' },
+      recorrentes: { title: 'Recorrentes', subtitle: 'Lançamentos automáticos e próximos vencimentos' },
       assistente: { title: 'Assistente', subtitle: 'Metas, insights e projeções inteligentes' },
       relatorios: { title: 'Relatórios', subtitle: 'Análise detalhada das suas finanças' },
     };
@@ -186,6 +187,7 @@ const App = (() => {
       case 'transacoes': renderTransactions(); break;
       case 'categorias': renderCategories(); break;
       case 'orcamentos': renderBudgets(); break;
+      case 'recorrentes': renderRecurring(); break;
       case 'assistente': renderAssistant(); break;
       case 'relatorios': renderReports(); break;
     }
@@ -920,6 +922,232 @@ const App = (() => {
       }
     }
   }
+
+  // ==========================================
+  // RECURRENTES
+  // ==========================================
+
+  function frequencyLabel(freq) {
+    return { monthly: 'Mensal', weekly: 'Semanal', yearly: 'Anual' }[freq] || freq;
+  }
+
+  function dayLabel(rec) {
+    if (rec.frequency === 'weekly') {
+      const days = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+      return `Toda ${days[rec.day]}`;
+    }
+    return `Dia ${rec.day}`;
+  }
+
+  function renderRecurring() {
+    const monthStr = $('#recurringMonthSelect').value || getCurrentMonthStr();
+    const recs = DB.getRecurring();
+    const list = $('#recurringList');
+
+    if (recs.length === 0) {
+      list.innerHTML = '<p class="empty-state">Nenhuma recorrente criada. Clique em "Nova Recorrente" para começar.</p>';
+    } else {
+      list.innerHTML = recs.map(r => {
+        const cat = DB.getCategory(r.category);
+        const nextDate = DB.getNextRecurringDate(r, new Date());
+        return `
+          <div class="recurring-item ${r.active ? '' : 'recurring-inactive'}">
+            <div class="recurring-item-left">
+              <div class="recurring-item-icon ${r.type}">
+                <i class="${safeIcon(cat ? cat.icon : 'fa-solid fa-repeat')}"></i>
+              </div>
+              <div class="recurring-item-info">
+                <span class="recurring-item-desc">${esc(r.description)}</span>
+                <span class="recurring-item-meta">
+                  ${frequencyLabel(r.frequency)} · ${dayLabel(r)} · ${esc(cat ? cat.name : 'Sem categoria')}
+                  ${r.startDate ? ` · desde ${formatDate(r.startDate)}` : ''}
+                </span>
+              </div>
+            </div>
+            <div class="recurring-item-right">
+              <span class="recurring-item-amount ${r.type === 'income' ? 'text-income' : 'text-expense'}">
+                ${r.type === 'income' ? '+' : '-'} ${formatCurrency(r.amount)}
+              </span>
+              <div class="recurring-item-actions">
+                <button class="btn-edit" onclick="App.launchRecurring('${r.id}')" title="Lançar no mês atual" aria-label="Lançar">
+                  <i class="fas fa-bolt"></i>
+                </button>
+                <button class="btn-edit" onclick="App.editRecurring('${r.id}')" title="Editar">
+                  <i class="fas fa-edit"></i>
+                </button>
+                <button class="btn-edit" onclick="App.toggleRecurring('${r.id}')" title="${r.active ? 'Pausar' : 'Reativar'}">
+                  <i class="fas fa-${r.active ? 'pause' : 'play'}"></i>
+                </button>
+                <button class="btn-delete" onclick="App.deleteRecurring('${r.id}')" title="Excluir">
+                  <i class="fas fa-trash-alt"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // Upcoming occurrences
+    renderUpcoming(monthStr);
+  }
+
+  function renderUpcoming(monthStr) {
+    const container = $('#upcomingList');
+    const upcoming = DB.getUpcomingRecurring(3, monthStr + '-01');
+
+    if (upcoming.length === 0) {
+      container.innerHTML = '<p class="empty-state">Nenhuma recorrente ativa.</p>';
+      return;
+    }
+
+    // Group by month
+    const byMonth = {};
+    upcoming.forEach(({ recurring, occurrences }) => {
+      occurrences.forEach(o => {
+        if (!byMonth[o.month]) byMonth[o.month] = [];
+        byMonth[o.month].push({ ...o, description: recurring.description, type: recurring.type, amount: recurring.amount });
+      });
+    });
+
+    const months = Object.keys(byMonth).sort();
+    container.innerHTML = months.map(m => {
+      const items = byMonth[m];
+      const total = items.reduce((s, i) => s + (i.type === 'income' ? i.amount : -i.amount), 0);
+      return `
+        <div class="upcoming-month">
+          <strong>${m}</strong>
+          <span class="text-muted">(${items.length} vencimento${items.length !== 1 ? 's' : ''})</span>
+          <span class="${total >= 0 ? 'text-income' : 'text-expense'} fw-600">${formatCurrency(Math.abs(total))}</span>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function setupRecurringSelect() {
+    const select = $('#recurringMonthSelect');
+    const options = getMonthOptions();
+    select.innerHTML = options.map(m =>
+      `<option value="${m.value}">${m.label}</option>`
+    ).join('');
+    select.value = getCurrentMonthStr();
+    select.addEventListener('change', renderRecurring);
+  }
+
+  function openRecurringModal(recurringId = null) {
+    const title = $('#recurringModalTitle');
+    const form = $('#recurringForm');
+    form.reset();
+    $('#recurringId').value = '';
+
+    // Populate expense categories (default)
+    const catSelect = $('#recurringCategory');
+    const expenseCats = DB.getCategoriesByType('expense');
+    catSelect.innerHTML = '<option value="">Selecione...</option>' +
+      expenseCats.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
+
+    $('#recurringDay').value = '5';
+    $('#recurringFrequency').value = 'monthly';
+
+    if (recurringId) {
+      title.textContent = 'Editar Recorrente';
+      const rec = DB.getRecurringById(recurringId);
+      if (rec) {
+        $('#recurringId').value = rec.id;
+        $('#recurringDescription').value = rec.description;
+        $('#recurringAmount').value = rec.amount;
+        $('#recurringType').value = rec.type;
+        $('#recurringFrequency').value = rec.frequency;
+        $('#recurringDay').value = rec.day;
+        $('#recurringStartDate').value = rec.startDate || '';
+        $('#recurringNotes').value = rec.notes || '';
+        // Update category select for the chosen type
+        const cats = DB.getCategoriesByType(rec.type);
+        catSelect.innerHTML = '<option value="">Selecione...</option>' +
+          cats.map(c => `<option value="${c.id}" ${c.id === rec.category ? 'selected' : ''}>${esc(c.name)}</option>`).join('');
+      }
+    } else {
+      title.textContent = 'Nova Recorrente';
+    }
+
+    openModal('recurringModal');
+  }
+
+  function saveRecurring(e) {
+    e.preventDefault();
+
+    const id = $('#recurringId').value;
+    const data = {
+      description: $('#recurringDescription').value,
+      amount: $('#recurringAmount').value,
+      type: $('#recurringType').value,
+      category: $('#recurringCategory').value,
+      frequency: $('#recurringFrequency').value,
+      day: $('#recurringDay').value,
+      startDate: $('#recurringStartDate').value || null,
+      notes: $('#recurringNotes').value,
+    };
+
+    let result;
+    if (id) {
+      result = DB.updateRecurring(id, data);
+    } else {
+      result = DB.addRecurring(data);
+    }
+
+    if (result.success) {
+      closeModal('recurringModal');
+      showToast(id ? 'Recorrente atualizada!' : 'Recorrente criada!', 'success');
+      renderRecurring();
+    } else {
+      showToast(result.error, 'error');
+    }
+  }
+
+  async function deleteRecurringAction(id) {
+    const confirmed = await showConfirm('Excluir Recorrente', 'Tem certeza que deseja excluir esta recorrente?');
+    if (confirmed) {
+      const result = DB.deleteRecurring(id);
+      if (result.success) {
+        showToast('Recorrente excluída!', 'success');
+        renderRecurring();
+      } else {
+        showToast(result.error, 'error');
+      }
+    }
+  }
+
+  function toggleRecurringAction(id) {
+    const rec = DB.getRecurringById(id);
+    if (!rec) return;
+    const result = DB.updateRecurring(id, { ...rec, active: !rec.active });
+    if (result.success) {
+      showToast(rec.active ? 'Recorrente pausada.' : 'Recorrente reativada!', 'success');
+      renderRecurring();
+    }
+  }
+
+  function launchRecurringAction(id) {
+    const rec = DB.getRecurringById(id);
+    if (!rec) return;
+    const monthStr = getCurrentMonthStr();
+    const result = DB.generateRecurringTransaction(id, monthStr);
+    if (result.success) {
+      showToast(`Lançamento de ${formatCurrency(rec.amount)} criado!`, 'success');
+      renderRecurring();
+      renderDashboard();
+      renderTransactions();
+      checkBudgetAlerts();
+    } else {
+      showToast(result.error, 'error');
+    }
+  }
+
+  // Exposed globally
+  window.App.launchRecurring = launchRecurringAction;
+  window.App.editRecurring = function (id) { openRecurringModal(id); };
+  window.App.deleteRecurring = async function (id) { await deleteRecurringAction(id); };
+  window.App.toggleRecurring = toggleRecurringAction;
 
   // ==========================================
   // ASSISTANT (Metas, Insights, Projeções)
@@ -1689,6 +1917,10 @@ const App = (() => {
     $('#budgetForm').addEventListener('submit', saveBudget);
     setupBudgetActions();
 
+    // --- Recurring ---
+    $('#addRecurringBtn').addEventListener('click', () => openRecurringModal());
+    $('#recurringForm').addEventListener('submit', saveRecurring);
+
     // --- Goal ---
     $('#addGoalBtn').addEventListener('click', () => openGoalModal());
     $('#addGoalLink').addEventListener('click', (e) => { e.preventDefault(); openGoalModal(); });
@@ -1753,6 +1985,7 @@ const App = (() => {
     // --- Setup ---
     setupTransactionFilters();
     setupBudgetSelect();
+    setupRecurringSelect();
     setupAssistantSelect();
     setupReportFilters();
 
@@ -1786,6 +2019,10 @@ const App = (() => {
     editGoal: window.App.editGoal,
     deleteGoal: window.App.deleteGoal,
     contributeGoal: window.App.contributeGoal,
+    launchRecurring: window.App.launchRecurring,
+    editRecurring: window.App.editRecurring,
+    deleteRecurring: window.App.deleteRecurring,
+    toggleRecurring: window.App.toggleRecurring,
   };
 })();
 
