@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Finanças Pessoais</title>
+  <meta name="description" content="Agente financeiro pessoal: controle receitas, despesas, orçamentos e metas. 100% offline.">
+  <meta name="theme-color" content="#2563eb">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/png" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="vendor/fontawesome/css/all.min.css">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="app">
+    <!-- Sidebar -->
+    <aside id="sidebar" class="sidebar">
+      <div class="sidebar-header">
+        <div class="logo">
+          <i class="fas fa-wallet"></i>
+          <span>Finanças</span>
+        </div>
+        <button id="sidebarToggle" class="sidebar-toggle" aria-label="Fechar menu">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <nav class="sidebar-nav">
+        <a href="#dashboard" class="nav-item active" data-page="dashboard">
+          <i class="fas fa-chart-pie"></i>
+          <span>Dashboard</span>
+        </a>
+        <a href="#transacoes" class="nav-item" data-page="transacoes">
+          <i class="fas fa-exchange-alt"></i>
+          <span>Transações</span>
+        </a>
+        <a href="#categorias" class="nav-item" data-page="categorias">
+          <i class="fas fa-tags"></i>
+          <span>Categorias</span>
+        </a>
+        <a href="#orcamentos" class="nav-item" data-page="orcamentos">
+          <i class="fas fa-bullseye"></i>
+          <span>Orçamentos</span>
+        </a>
+        <a href="#assistente" class="nav-item" data-page="assistente">
+          <i class="fas fa-robot"></i>
+          <span>Assistente</span>
+          <span id="assistantAlertBadge" class="nav-badge" style="display:none;">0</span>
+        </a>
+        <a href="#relatorios" class="nav-item" data-page="relatorios">
+          <i class="fas fa-chart-bar"></i>
+          <span>Relatórios</span>
+        </a>
+      </nav>
+      <div class="sidebar-footer">
+        <div class="sidebar-total">
+          <span class="label">Saldo Total</span>
+          <span id="totalBalance" class="value">R$ 0,00</span>
+        </div>
+        <div class="sidebar-actions">
+          <button id="exportDataBtn" class="btn-icon" title="Exportar Dados">
+            <i class="fas fa-download"></i>
+          </button>
+          <button id="importDataBtn" class="btn-icon" title="Importar Dados">
+            <i class="fas fa-upload"></i>
+          </button>
+          <button id="clearDataBtn" class="btn-icon btn-icon--danger" title="Limpar Dados">
+            <i class="fas fa-trash-alt"></i>
+          </button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Overlay for mobile -->
+    <div id="sidebarOverlay" class="sidebar-overlay"></div>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <!-- Top Bar -->
+      <header class="top-bar">
+        <button id="mobileMenuBtn" class="mobile-menu-btn" aria-label="Abrir menu">
+          <i class="fas fa-bars"></i>
+        </button>
+        <div class="top-bar-title">
+          <h1 id="pageTitle">Dashboard</h1>
+          <p id="pageSubtitle" class="text-muted">Visão geral das suas finanças</p>
+        </div>
+        <div class="top-bar-actions">
+          <button id="addTransactionBtn" class="btn btn-primary">
+            <i class="fas fa-plus"></i>
+            <span>Nova Transação</span>
+          </button>
+        </div>
+      </header>
+
+      <!-- Pages -->
+      <div class="pages">
+        <!-- Dashboard Page -->
+        <section id="page-dashboard" class="page active">
+          <div class="dashboard-grid">
+            <!-- Cards -->
+            <div class="card card-stat">
+              <div class="card-stat-icon card-stat-icon--income">
+                <i class="fas fa-arrow-up"></i>
+              </div>
+              <div class="card-stat-body">
+                <span class="card-stat-label">Receitas do Mês</span>
+                <span id="monthlyIncome" class="card-stat-value text-income">R$ 0,00</span>
+              </div>
+            </div>
+            <div class="card card-stat">
+              <div class="card-stat-icon card-stat-icon--expense">
+                <i class="fas fa-arrow-down"></i>
+              </div>
+              <div class="card-stat-body">
+                <span class="card-stat-label">Despesas do Mês</span>
+                <span id="monthlyExpense" class="card-stat-value text-expense">R$ 0,00</span>
+              </div>
+            </div>
+            <div class="card card-stat">
+              <div class="card-stat-icon card-stat-icon--balance">
+                <i class="fas fa-scale-balanced"></i>
+              </div>
+              <div class="card-stat-body">
+                <span class="card-stat-label">Saldo do Mês</span>
+                <span id="monthlyBalance" class="card-stat-value">R$ 0,00</span>
+              </div>
+            </div>
+            <div class="card card-stat">
+              <div class="card-stat-icon card-stat-icon--savings">
+                <i class="fas fa-piggy-bank"></i>
+              </div>
+              <div class="card-stat-body">
+                <span class="card-stat-label">Taxa de Economia</span>
+                <span id="savingsRate" class="card-stat-value">0%</span>
+              </div>
+            </div>
+
+            <!-- Charts -->
+            <div class="card card-chart card-chart--full">
+              <div class="card-header">
+                <h3>Receitas vs Despesas</h3>
+                <select id="incomeExpenseChartPeriod" class="form-select form-select--sm">
+                  <option value="6">Últimos 6 meses</option>
+                  <option value="12" selected>Últimos 12 meses</option>
+                </select>
+              </div>
+              <div class="card-body">
+                <canvas id="incomeExpenseChart"></canvas>
+              </div>
+            </div>
+            <div class="card card-chart">
+              <div class="card-header">
+                <h3>Despesas por Categoria</h3>
+                <select id="expensePieChartPeriod" class="form-select form-select--sm">
+                  <option value="thisMonth">Este mês</option>
+                  <option value="lastMonth">Mês passado</option>
+                  <option value="3">Últimos 3 meses</option>
+                </select>
+              </div>
+              <div class="card-body">
+                <canvas id="expensePieChart"></canvas>
+              </div>
+            </div>
+
+            <!-- Recent Transactions -->
+            <div class="card card-transactions card-chart--full">
+              <div class="card-header">
+                <h3>Transações Recentes</h3>
+                <a href="#transacoes" class="btn-link" data-page="transacoes">Ver todas</a>
+              </div>
+              <div class="card-body">
+                <div id="recentTransactions" class="transaction-list">
+                  <p class="empty-state">Nenhuma transação registrada.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Transactions Page -->
+        <section id="page-transacoes" class="page">
+          <div class="transactions-toolbar">
+            <div class="toolbar-left">
+              <div class="search-box">
+                <i class="fas fa-search"></i>
+                <input type="text" id="transactionSearch" class="form-input" placeholder="Buscar transações...">
+              </div>
+              <select id="transactionTypeFilter" class="form-select">
+                <option value="all">Todos os tipos</option>
+                <option value="income">Receitas</option>
+                <option value="expense">Despesas</option>
+              </select>
+              <select id="transactionCategoryFilter" class="form-select">
+                <option value="all">Todas as categorias</option>
+              </select>
+              <select id="transactionMonthFilter" class="form-select">
+                <option value="all">Todos os meses</option>
+              </select>
+            </div>
+            <div class="toolbar-right">
+              <button id="exportTransactionsBtn" class="btn btn-outline" title="Exportar CSV">
+                <i class="fas fa-file-csv"></i> Exportar
+              </button>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-body">
+              <div class="table-responsive">
+                <table class="table" id="transactionsTable">
+                  <thead>
+                    <tr>
+                      <th>Data</th>
+                      <th>Descrição</th>
+                      <th>Categoria</th>
+                      <th>Tipo</th>
+                      <th>Valor</th>
+                      <th>Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody id="transactionsBody">
+                    <tr>
+                      <td colspan="6" class="text-center">Nenhuma transação encontrada.</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="table-footer">
+                <span id="transactionsCount">0 transações</span>
+                <span id="transactionsTotal" class="fw-600">Total: R$ 0,00</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Categories Page -->
+        <section id="page-categorias" class="page">
+          <div class="page-toolbar">
+            <button id="addCategoryBtn" class="btn btn-primary">
+              <i class="fas fa-plus"></i> Nova Categoria
+            </button>
+          </div>
+          <div class="categories-grid">
+            <div class="card">
+              <div class="card-header">
+                <h3><i class="fas fa-arrow-up text-income"></i> Categorias de Receita</h3>
+              </div>
+              <div class="card-body">
+                <div id="incomeCategories" class="category-list">
+                  <p class="empty-state">Nenhuma categoria de receita.</p>
+                </div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-header">
+                <h3><i class="fas fa-arrow-down text-expense"></i> Categorias de Despesa</h3>
+              </div>
+              <div class="card-body">
+                <div id="expenseCategories" class="category-list">
+                  <p class="empty-state">Nenhuma categoria de despesa.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Budgets Page -->
+        <section id="page-orcamentos" class="page">
+          <div class="page-toolbar">
+            <div class="toolbar-left">
+              <select id="budgetMonthSelect" class="form-select">
+                <!-- Options generated by JS -->
+              </select>
+            </div>
+            <div class="toolbar-right">
+              <button id="addBudgetBtn" class="btn btn-primary">
+                <i class="fas fa-plus"></i> Definir Orçamento
+              </button>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header">
+              <h3>Orçamento do Mês</h3>
+              <div class="budget-summary">
+                <span id="budgetTotalText">R$ 0,00 de R$ 0,00</span>
+                <span id="budgetProgressText" class="text-muted">0%</span>
+              </div>
+            </div>
+            <div class="card-body">
+              <div class="budget-progress-bar">
+                <div id="budgetOverallProgress" class="budget-progress-fill" style="width: 0%"></div>
+              </div>
+              <div id="budgetList" class="budget-list">
+                <p class="empty-state">Nenhum orçamento definido para este mês.</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Assistant Page -->
+        <section id="page-assistente" class="page">
+          <div class="page-toolbar">
+            <div class="toolbar-left">
+              <select id="assistantMonthSelect" class="form-select">
+                <!-- Options generated by JS -->
+              </select>
+            </div>
+            <div class="toolbar-right">
+              <button id="addGoalBtn" class="btn btn-primary">
+                <i class="fas fa-plus"></i> Nova Meta
+              </button>
+            </div>
+          </div>
+
+          <!-- Alerts -->
+          <div id="assistantAlerts" class="assistant-alerts"></div>
+
+          <!-- Quick stats -->
+          <div class="assistant-stats">
+            <div class="card card-stat">
+              <div class="card-stat-icon card-stat-icon--balance">
+                <i class="fas fa-scale-balanced"></i>
+              </div>
+              <div class="card-stat-body">
+                <span class="card-stat-label">Saldo Atual</span>
+                <span id="assistantCurrentBalance" class="card-stat-value">R$ 0,00</span>
+              </div>
+            </div>
+            <div class="card card-stat">
+              <div class="card-stat-icon card-stat-icon--savings">
+                <i class="fas fa-piggy-bank"></i>
+              </div>
+              <div class="card-stat-body">
+                <span class="card-stat-label">Economia Média/Mês</span>
+                <span id="assistantAvgSavings" class="card-stat-value">R$ 0,00</span>
+              </div>
+            </div>
+            <div class="card card-stat">
+              <div class="card-stat-icon card-stat-icon--income">
+                <i class="fas fa-arrow-up"></i>
+              </div>
+              <div class="card-stat-body">
+                <span class="card-stat-label">Projeção em 6 meses</span>
+                <span id="assistantProjectedBalance" class="card-stat-value">R$ 0,00</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="assistant-grid">
+            <!-- Projection Chart -->
+            <div class="card card-chart card-chart--full">
+              <div class="card-header">
+                <h3><i class="fas fa-chart-line"></i> Projeção de Saldo (próximos 6 meses)</h3>
+              </div>
+              <div class="card-body">
+                <canvas id="projectionChart"></canvas>
+              </div>
+            </div>
+
+            <!-- Goals -->
+            <div class="card card-chart card-chart--full">
+              <div class="card-header">
+                <h3><i class="fas fa-trophy"></i> Metas de Economia</h3>
+                <a href="#" class="btn-link" id="addGoalLink">Nova meta</a>
+              </div>
+              <div class="card-body">
+                <div id="goalsList" class="goals-list">
+                  <p class="empty-state">Nenhuma meta criada. Clique em "Nova Meta" para começar.</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Insights -->
+            <div class="card card-chart card-chart--full">
+              <div class="card-header">
+                <h3><i class="fas fa-lightbulb"></i> Insights do Assistente</h3>
+              </div>
+              <div class="card-body">
+                <div id="insightsList" class="insights-list">
+                  <p class="empty-state">Adicione transações para receber análises personalizadas.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Reports Page -->
+        <section id="page-relatorios" class="page">
+          <div class="page-toolbar">
+            <div class="toolbar-left">
+              <select id="reportYear" class="form-select">
+                <!-- Options generated by JS -->
+              </select>
+              <select id="reportMonth" class="form-select">
+                <option value="all">Ano completo</option>
+                <!-- Months generated by JS -->
+              </select>
+            </div>
+            <div class="toolbar-right">
+              <button id="generateReportBtn" class="btn btn-primary">
+                <i class="fas fa-sync-alt"></i> Atualizar
+              </button>
+            </div>
+          </div>
+          <div class="report-grid">
+            <div class="card card-chart card-chart--full">
+              <div class="card-header">
+                <h3>Evolução Mensal</h3>
+              </div>
+              <div class="card-body">
+                <canvas id="reportMonthlyChart"></canvas>
+              </div>
+            </div>
+            <div class="card card-chart">
+              <div class="card-header">
+                <h3>Distribuição de Despesas</h3>
+              </div>
+              <div class="card-body">
+                <canvas id="reportPieChart"></canvas>
+              </div>
+            </div>
+            <div class="card card-chart">
+              <div class="card-header">
+                <h3>Top Categorias</h3>
+              </div>
+              <div class="card-body">
+                <div id="topCategories" class="top-categories">
+                  <p class="empty-state">Sem dados no período.</p>
+                </div>
+              </div>
+            </div>
+            <div class="card card-chart">
+              <div class="card-header">
+                <h3>Resumo do Período</h3>
+              </div>
+              <div class="card-body">
+                <div class="report-summary" id="reportSummary">
+                  <div class="report-summary-item">
+                    <span class="label">Total Receitas</span>
+                    <span id="reportTotalIncome" class="value text-income">R$ 0,00</span>
+                  </div>
+                  <div class="report-summary-item">
+                    <span class="label">Total Despesas</span>
+                    <span id="reportTotalExpense" class="value text-expense">R$ 0,00</span>
+                  </div>
+                  <div class="report-summary-item">
+                    <span class="label">Saldo</span>
+                    <span id="reportTotalBalance" class="value">R$ 0,00</span>
+                  </div>
+                  <div class="report-summary-item">
+                    <span class="label">Nº Transações</span>
+                    <span id="reportTransactionCount" class="value">0</span>
+                  </div>
+                  <div class="report-summary-item">
+                    <span class="label">Maior Despesa</span>
+                    <span id="reportLargestExpense" class="value text-expense">R$ 0,00</span>
+                  </div>
+                  <div class="report-summary-item">
+                    <span class="label">Média por Transação</span>
+                    <span id="reportAvgTransaction" class="value">R$ 0,00</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <!-- Modals -->
+  <div id="transactionModal" class="modal">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 id="transactionModalTitle">Nova Transação</h2>
+        <button class="modal-close" aria-label="Fechar">&times;</button>
+      </div>
+      <form id="transactionForm" class="modal-body" novalidate>
+        <input type="hidden" id="transactionId" value="">
+        <div class="form-group">
+          <label for="transactionType" class="form-label">Tipo</label>
+          <select id="transactionType" class="form-select" required>
+            <option value="expense">Despesa</option>
+            <option value="income">Receita</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="transactionDescription" class="form-label">Descrição</label>
+          <input type="text" id="transactionDescription" class="form-input" placeholder="Ex: Salário, Aluguel..." required>
+        </div>
+        <div class="form-group">
+          <label for="transactionAmount" class="form-label">Valor (R$)</label>
+          <input type="number" id="transactionAmount" class="form-input" placeholder="0,00" step="0.01" min="0.01" required>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="transactionCategory" class="form-label">Categoria</label>
+            <select id="transactionCategory" class="form-select" required>
+              <option value="">Selecione...</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="transactionDate" class="form-label">Data</label>
+            <input type="date" id="transactionDate" class="form-input" required>
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="transactionNotes" class="form-label">Observações (opcional)</label>
+          <textarea id="transactionNotes" class="form-input form-textarea" placeholder="Notas adicionais..."></textarea>
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn btn-outline modal-cancel">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Salvar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="categoryModal" class="modal">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content modal-content--sm">
+      <div class="modal-header">
+        <h2 id="categoryModalTitle">Nova Categoria</h2>
+        <button class="modal-close" aria-label="Fechar">&times;</button>
+      </div>
+      <form id="categoryForm" class="modal-body" novalidate>
+        <input type="hidden" id="categoryId" value="">
+        <div class="form-group">
+          <label for="categoryName" class="form-label">Nome da Categoria</label>
+          <input type="text" id="categoryName" class="form-input" placeholder="Ex: Alimentação" required>
+        </div>
+        <div class="form-group">
+          <label for="categoryType" class="form-label">Tipo</label>
+          <select id="categoryType" class="form-select" required>
+            <option value="expense">Despesa</option>
+            <option value="income">Receita</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="categoryIcon" class="form-label">Ícone</label>
+          <div class="icon-picker" id="iconPicker">
+            <!-- Generated by JS -->
+          </div>
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn btn-outline modal-cancel">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Salvar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="budgetModal" class="modal">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content modal-content--sm">
+      <div class="modal-header">
+        <h2 id="budgetModalTitle">Definir Orçamento</h2>
+        <button class="modal-close" aria-label="Fechar">&times;</button>
+      </div>
+      <form id="budgetForm" class="modal-body" novalidate>
+        <input type="hidden" id="budgetId" value="">
+        <div class="form-group">
+          <label for="budgetCategory" class="form-label">Categoria</label>
+          <select id="budgetCategory" class="form-select" required>
+            <option value="">Selecione...</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="budgetMonth" class="form-label">Mês/Ano</label>
+          <input type="month" id="budgetMonth" class="form-input" required>
+        </div>
+        <div class="form-group">
+          <label for="budgetAmount" class="form-label">Limite (R$)</label>
+          <input type="number" id="budgetAmount" class="form-input" placeholder="0,00" step="0.01" min="0.01" required>
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn btn-outline modal-cancel">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Salvar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="goalModal" class="modal">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content modal-content--sm">
+      <div class="modal-header">
+        <h2 id="goalModalTitle">Nova Meta</h2>
+        <button class="modal-close" aria-label="Fechar">&times;</button>
+      </div>
+      <form id="goalForm" class="modal-body" novalidate>
+        <input type="hidden" id="goalId" value="">
+        <div class="form-group">
+          <label for="goalName" class="form-label">Nome da Meta</label>
+          <input type="text" id="goalName" class="form-input" placeholder="Ex: Reserva de emergência" required>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="goalTarget" class="form-label">Valor da Meta (R$)</label>
+            <input type="number" id="goalTarget" class="form-input" placeholder="0,00" step="0.01" min="0.01" required>
+          </div>
+          <div class="form-group">
+            <label for="goalCurrent" class="form-label">Já guardado (R$)</label>
+            <input type="number" id="goalCurrent" class="form-input" placeholder="0,00" step="0.01" min="0">
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="goalDeadline" class="form-label">Prazo (opcional)</label>
+          <input type="month" id="goalDeadline" class="form-input">
+        </div>
+        <div class="form-group">
+          <label for="goalIcon" class="form-label">Ícone</label>
+          <div class="icon-picker" id="goalIconPicker">
+            <!-- Generated by JS -->
+          </div>
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn btn-outline modal-cancel">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Salvar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="contributionModal" class="modal">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content modal-content--sm">
+      <div class="modal-header">
+        <h2 id="contributionTitle">Adicionar Valor</h2>
+        <button class="modal-close" aria-label="Fechar">&times;</button>
+      </div>
+      <form id="contributionForm" class="modal-body" novalidate>
+        <input type="hidden" id="contributionGoalId" value="">
+        <p id="contributionGoalName" class="text-muted" style="margin-bottom: var(--space-md);"></p>
+        <div class="form-group">
+          <label for="contributionAmount" class="form-label">Valor para guardar (R$)</label>
+          <input type="number" id="contributionAmount" class="form-input" placeholder="0,00" step="0.01" min="0.01" required>
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn btn-outline modal-cancel">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Adicionar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="confirmModal" class="modal">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content modal-content--sm">
+      <div class="modal-header">
+        <h2 id="confirmTitle">Confirmar</h2>
+        <button class="modal-close" aria-label="Fechar">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p id="confirmMessage">Tem certeza que deseja realizar esta ação?</p>
+        <div class="form-actions">
+          <button class="btn btn-outline modal-cancel">Cancelar</button>
+          <button id="confirmAction" class="btn btn-danger">Confirmar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Container -->
+  <div id="toastContainer" class="toast-container"></div>
+
+  <script src="vendor/chart.umd.min.js"></script>
+  <script src="js/storage.js"></script>
+  <script src="js/app.js"></script>
+  <script>
+    // PWA: registra o Service Worker (cache offline + instalável)
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('service-worker.js')
+          .then(() => console.log('[PWA] Service Worker registrado com sucesso'))
+          .catch((err) => console.warn('[PWA] Falha ao registrar SW:', err));
+      });
+    }
+  </script>
+</body>
+</html>
