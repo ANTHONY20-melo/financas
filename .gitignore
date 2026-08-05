@@ -1,0 +1,18 @@
+.vercel
+
+# Android TWA signing key and build artifacts
+android.keystore
+*.apk
+*.aab
+
+# Generated Android project directories
+app/
+build/
+.gradle/
+
+# Gradle wrapper cache (not the wrapper itself)
+twa/.gradle/
+
+# Other generated files
+manifest-checksum.txt
+store_icon.png
