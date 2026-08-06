@@ -4,7 +4,7 @@
    ============================================ */
 'use strict';
 
-const CACHE = 'financas-cache-v2';
+const CACHE = 'financas-cache-v3';
 
 const PRECACHE = [
   './',
@@ -12,6 +12,7 @@ const PRECACHE = [
   './manifest.json',
   './css/style.css',
   './js/storage.js',
+  './js/sync.js',
   './js/app.js',
   './vendor/chart.umd.min.js',
   './vendor/fontawesome/css/all.min.css',
