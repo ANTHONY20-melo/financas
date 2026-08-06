@@ -392,9 +392,9 @@ const App = (() => {
     }
 
     const expenses = DB.getCategoryExpenses(year, period === '3' ? undefined : month);
-    const total = expenses.reduce((s, e) => s + e.total, 0);
+    const total = expenses.reduce((s, e) => s + (Number(e.total) || 0), 0);
 
-    if (expenses.length === 0 || total === 0) {
+    if (expenses.length === 0 || !Number.isFinite(total) || total <= 0) {
       // Show empty state on canvas
       charts.expensePie = new Chart(ctx, {
         type: 'doughnut',
@@ -454,18 +454,27 @@ const App = (() => {
               font: { family: 'Inter', size: 11 },
               generateLabels: (chart) => {
                 const original = Chart.defaults.plugins.legend.labels.generateLabels(chart);
-                return original.map(label => ({
-                  ...label,
-                  text: `${label.text} (${((chart.data.datasets[0].data[label.index] / total) * 100).toFixed(1)}%)`,
-                }));
+                return original.map(label => {
+                  const val = chart.data.datasets[0].data[label.index];
+                  const pct = Number.isFinite(val) && total > 0
+                    ? ((val / total) * 100).toFixed(1)
+                    : '0';
+                  const text = label.text || 'Sem nome';
+                  return {
+                    ...label,
+                    text: `${text} (${pct}%)`,
+                  };
+                });
               },
             },
           },
           tooltip: {
             callbacks: {
               label: (ctx) => {
-                const pct = ((ctx.raw / total) * 100).toFixed(1);
-                return `${ctx.label}: ${formatCurrency(ctx.raw)} (${pct}%)`;
+                const pct = Number.isFinite(ctx.raw) && total > 0
+                  ? ((ctx.raw / total) * 100).toFixed(1)
+                  : '0';
+                return `${ctx.label || 'Sem nome'}: ${formatCurrency(ctx.raw || 0)} (${pct}%)`;
               },
             },
           },
