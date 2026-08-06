@@ -21,7 +21,7 @@ const Sync = (() => {
   // URL: Dashboard → Settings → API
   // A anon key é pública por design (pode ir para o GitHub); a service role NUNCA.
   let supabaseUrl = 'https://nezifjtwjhgghxjohdys.supabase.co';
-  let supabaseAnonKey = ''; // COLE A ANON KEY AQUI
+  let supabaseAnonKey = 'sb_publishable_gtn8KVNdX55WqvTChxFqYg_LMQSSDgo'; // COLE A ANON KEY AQUI
 
   // Permite configurar em runtime (também usado nos testes)
   function configure(url, anonKey) {
