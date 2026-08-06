@@ -219,6 +219,33 @@ const App = (() => {
     const savingsRate = summary.income > 0 ? ((summary.income - summary.expense) / summary.income * 100) : 0;
     $('#savingsRate').textContent = savingsRate.toFixed(1) + '%';
 
+    // P5: card "A Pagar" + alerta de contas atrasadas/vencendo
+    const pending = DB.getPendingSummary();
+    const pendingAmountEl = $('#pendingAmount');
+    pendingAmountEl.textContent = formatCurrency(pending.total);
+    pendingAmountEl.className = 'card-stat-value text-pending';
+    $('#pendingCount').textContent = pending.count > 0
+      ? `${pending.count} conta${pending.count !== 1 ? 's' : ''} em aberto`
+      : 'Nenhuma conta em aberto';
+
+    const alertEl = $('#pendingAlert');
+    if (pending.overdueCount > 0) {
+      alertEl.style.display = 'flex';
+      alertEl.className = 'card card-alert danger';
+      const more = pending.count > pending.overdueCount ? ` Mais ${pending.count - pending.overdueCount} a vencer.` : '';
+      alertEl.innerHTML = `<i class="fas fa-triangle-exclamation"></i>
+        <span><strong>${pending.overdueCount} conta${pending.overdueCount !== 1 ? 's' : ''} atrasada${pending.overdueCount !== 1 ? 's' : ''}</strong>: ${formatCurrency(pending.overdueTotal)} em aberto.${more}</span>
+        <a href="#transacoes" data-page="transacoes" class="btn-link">Ver transações</a>`;
+    } else if (pending.count > 0) {
+      alertEl.style.display = 'flex';
+      alertEl.className = 'card card-alert';
+      alertEl.innerHTML = `<i class="fas fa-clock"></i>
+        <span><strong>${pending.count} conta${pending.count !== 1 ? 's' : ''} a pagar</strong>: ${formatCurrency(pending.total)} em aberto.</span>
+        <a href="#transacoes" data-page="transacoes" class="btn-link">Ver transações</a>`;
+    } else {
+      alertEl.style.display = 'none';
+    }
+
     // Update sidebar total balance
     const allTransactions = DB.getTransactions();
     const totalBalance = allTransactions.reduce((sum, t) => {
@@ -453,12 +480,13 @@ const App = (() => {
     const type = $('#transactionTypeFilter').value;
     const category = $('#transactionCategoryFilter').value;
     const month = $('#transactionMonthFilter').value;
+    const status = $('#transactionStatusFilter').value;
 
-    const transactions = DB.getTransactionsByFilters({ search, type, category, month });
+    const transactions = DB.getTransactionsByFilters({ search, type, category, month, paid: status });
     const tbody = $('#transactionsBody');
 
     if (transactions.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="6" class="text-center">Nenhuma transação encontrada.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="7" class="text-center">Nenhuma transação encontrada.</td></tr>';
     } else {
       tbody.innerHTML = transactions.map(t => {
         const cat = DB.getCategory(t.category);
@@ -471,6 +499,21 @@ const App = (() => {
               <i class="fa-solid fa-layer-group"></i>
             </button>`
           : '';
+        // P5: status de pagamento (receita é sempre recebida)
+        const isIncome = t.type === 'income';
+        const paid = isIncome ? true : DB.isPaid(t);
+        const overdue = !paid && t.date < getTodayStr();
+        const statusBadge = isIncome
+          ? '<span class="badge badge-paid">Recebida</span>'
+          : paid
+            ? '<span class="badge badge-paid">Paga</span>'
+            : overdue
+              ? '<span class="badge badge-unpaid badge-unpaid--overdue">Atrasada</span>'
+              : '<span class="badge badge-unpaid">A pagar</span>';
+        const paidBtn = isIncome ? '' : `
+          <button class="btn-toggle-paid" onclick="App.togglePaid('${t.id}')" title="${paid ? 'Marcar como não paga' : 'Marcar como paga'}">
+            <i class="fas fa-${paid ? 'check-circle' : 'circle'}"></i>
+          </button>`;
         return `
           <tr>
             <td>${formatDate(t.date)}</td>
@@ -484,11 +527,13 @@ const App = (() => {
               </span>
             </td>
             <td>${t.type === 'income' ? 'Receita' : 'Despesa'}</td>
+            <td>${statusBadge}</td>
             <td class="${t.type === 'income' ? 'text-income' : 'text-expense'} fw-600">
               ${t.type === 'income' ? '+' : '-'} ${formatCurrency(t.amount)}
             </td>
             <td>
               <div class="actions">
+                ${paidBtn}
                 <button class="btn-edit" onclick="App.editTransaction('${t.id}')" title="Editar">
                   <i class="fas fa-edit"></i>
                 </button>
@@ -531,6 +576,7 @@ const App = (() => {
     $('#transactionTypeFilter').addEventListener('change', renderTransactions);
     $('#transactionCategoryFilter').addEventListener('change', renderTransactions);
     $('#transactionMonthFilter').addEventListener('change', renderTransactions);
+    $('#transactionStatusFilter').addEventListener('change', renderTransactions);
   }
 
   // --- Transaction Modal ---
@@ -564,6 +610,9 @@ const App = (() => {
         $('#transactionDate').value = t.date;
         $('#transactionNotes').value = t.notes || '';
         updateCategorySelect(t.type, t.category);
+        // P5: status de pagamento (receita = sempre recebida)
+        $('#transactionPaid').checked = t.type === 'income' ? true : DB.isPaid(t);
+        updatePaidGroupVisibility();
         // Parcelas: em edição de uma parcela gerada, o campo fica oculto
         // (não faz sentido "reparcelar" uma parcela já criada — exclua e recrie)
         const instField = $('#transactionInstallments');
@@ -583,9 +632,20 @@ const App = (() => {
       instField.style.display = '';
       instField.value = '1';
       $('#installmentHint').style.display = 'none';
+      // P5: nova despesa nasce "a pagar"; receita nasce "recebida"
+      $('#transactionPaid').checked = false;
+      updatePaidGroupVisibility();
     }
 
     openModal('transactionModal');
+  }
+
+  // P5: mostra o checkbox "Já foi pago?" apenas para despesa (receita é sempre recebida)
+  function updatePaidGroupVisibility() {
+    const isExpense = $('#transactionType').value === 'expense';
+    const group = $('#transactionPaidGroup');
+    group.style.display = isExpense ? '' : 'none';
+    if (!isExpense) $('#transactionPaid').checked = true;
   }
 
   // Popula o select de parcelas (2..48) e controla a dica
@@ -622,6 +682,7 @@ const App = (() => {
       date: $('#transactionDate').value,
       notes: $('#transactionNotes').value,
       installments: $('#transactionInstallments').value,
+      paid: $('#transactionPaid').checked,
     };
 
     let result;
@@ -686,6 +747,22 @@ const App = (() => {
       } else {
         showToast(result.error, 'error');
       }
+    }
+  };
+
+  // P5: alterna o status pago/não pago de uma despesa
+  window.App.togglePaid = function (id) {
+    const t = DB.getTransactions().find(x => x.id === id);
+    if (!t) return;
+    const next = !DB.isPaid(t);
+    const result = DB.setTransactionPaid(id, next);
+    if (result.success) {
+      showToast(next ? 'Marcada como paga!' : 'Marcada como a pagar', 'success');
+      renderDashboard();
+      renderTransactions();
+      checkBudgetAlerts();
+    } else {
+      showToast(result.error, 'error');
     }
   };
 
@@ -1948,11 +2025,14 @@ const App = (() => {
       });
     });
 
-    $$('[data-page]').forEach(item => {
-      item.addEventListener('click', (e) => {
+    // Event delegation para [data-page] (cobre links renderizados dinamicamente,
+    // ex.: alerta de contas a pagar no dashboard)
+    document.addEventListener('click', (e) => {
+      const link = e.target.closest('[data-page]');
+      if (link) {
         e.preventDefault();
-        navigateTo(item.dataset.page);
-      });
+        navigateTo(link.dataset.page);
+      }
     });
 
     // --- Transaction Button ---
@@ -1966,6 +2046,8 @@ const App = (() => {
       const cats = DB.getCategoriesByType(e.target.value);
       catSelect.innerHTML = '<option value="">Selecione...</option>' +
         cats.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
+      // P5: ao trocar para receita, esconde "Já foi pago?" e força recebida
+      updatePaidGroupVisibility();
     });
     // Categorização automática: ao digitar a descrição, sugere categoria do histórico
     $('#transactionDescription').addEventListener('input', (e) => {
@@ -2086,6 +2168,7 @@ const App = (() => {
     editTransaction: window.App.editTransaction,
     deleteTransaction: window.App.deleteTransaction,
     deleteInstallmentGroup: window.App.deleteInstallmentGroup,
+    togglePaid: window.App.togglePaid,
     editCategory: window.App.editCategory,
     deleteCategory: window.App.deleteCategory,
     editGoal: window.App.editGoal,

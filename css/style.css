@@ -590,10 +590,85 @@ table {
   line-height: 1.2;
 }
 
+/* --- Status de Pagamento (P5) --- */
+.card-stat-icon--pending {
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
+}
+
+.text-pending {
+  color: var(--color-warning);
+}
+
+.card-stat-sub {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
+/* Alerta de contas atrasadas/vencendo no topo do dashboard */
+.card-alert {
+  grid-column: 1 / -1;
+  border-left: 4px solid var(--color-warning);
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
+  padding: var(--space-sm) var(--space-md);
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.card-alert.danger {
+  border-left-color: var(--color-expense);
+  background: var(--color-expense-bg);
+  color: var(--color-expense);
+}
+
+.card-alert .btn-link {
+  margin-left: auto;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+/* Badge de status na tabela de transações */
+.badge-paid {
+  background: var(--color-income-bg);
+  color: var(--color-income-dark);
+}
+
+.badge-unpaid {
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
+}
+
+.badge-unpaid--overdue {
+  background: var(--color-expense-bg);
+  color: var(--color-expense);
+}
+
+/* Checkbox "Já foi pago?" no modal */
+.form-checkbox {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--color-text);
+  user-select: none;
+}
+
+.form-checkbox input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--color-primary);
+  cursor: pointer;
+}
+
 /* --- Dashboard Grid --- */
 .dashboard-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: var(--space-lg);
 }
 

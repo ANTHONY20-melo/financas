@@ -139,6 +139,17 @@
                 <span id="savingsRate" class="card-stat-value">0%</span>
               </div>
             </div>
+            <div class="card card-stat" id="pendingCard">
+              <div class="card-stat-icon card-stat-icon--pending">
+                <i class="fas fa-clock"></i>
+              </div>
+              <div class="card-stat-body">
+                <span class="card-stat-label">A Pagar</span>
+                <span id="pendingAmount" class="card-stat-value text-pending">R$ 0,00</span>
+                <span id="pendingCount" class="card-stat-sub">0 contas em aberto</span>
+              </div>
+            </div>
+            <div id="pendingAlert" class="card card-alert" style="display:none;"></div>
 
             <!-- Charts -->
             <div class="card card-chart card-chart--full">
@@ -201,6 +212,11 @@
               <select id="transactionMonthFilter" class="form-select">
                 <option value="all">Todos os meses</option>
               </select>
+              <select id="transactionStatusFilter" class="form-select">
+                <option value="all">Todas: Pagas e A Pagar</option>
+                <option value="unpaid">A Pagar</option>
+                <option value="paid">Pagas</option>
+              </select>
             </div>
             <div class="toolbar-right">
               <button id="exportTransactionsBtn" class="btn btn-outline" title="Exportar CSV">
@@ -218,13 +234,14 @@
                       <th>Descrição</th>
                       <th>Categoria</th>
                       <th>Tipo</th>
+                      <th>Status</th>
                       <th>Valor</th>
                       <th>Ações</th>
                     </tr>
                   </thead>
                   <tbody id="transactionsBody">
                     <tr>
-                      <td colspan="6" class="text-center">Nenhuma transação encontrada.</td>
+                      <td colspan="7" class="text-center">Nenhuma transação encontrada.</td>
                     </tr>
                   </tbody>
                 </table>
@@ -557,6 +574,13 @@
           <small class="form-hint" id="installmentHint" style="display:none;">
             Serão geradas parcelas mensais automaticamente, uma por mês.
           </small>
+        </div>
+        <div class="form-group" id="transactionPaidGroup">
+          <label class="form-checkbox">
+            <input type="checkbox" id="transactionPaid">
+            <span id="transactionPaidLabel">Já foi pago?</span>
+          </label>
+          <small class="form-hint" id="paidHint">Despesas não pagas aparecem em "A Pagar".</small>
         </div>
         <div class="form-group">
           <label for="transactionNotes" class="form-label">Observações (opcional)</label>

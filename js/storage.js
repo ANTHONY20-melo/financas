@@ -133,6 +133,9 @@ const DB = (() => {
       category: data.category,
       date: data.date,
       notes: data.notes ? data.notes.trim() : '',
+      // P5: status de pagamento. Despesa nova nasce "a pagar" (false); receita
+      // nasce "recebida" (true). Dados legados sem o campo são tratados como pagos.
+      paid: data.paid === undefined ? (data.type === 'expense' ? false : true) : !!data.paid,
       createdAt: new Date().toISOString(),
     };
 
@@ -198,6 +201,7 @@ const DB = (() => {
         date: installmentDate(data.date, i),
         notes: data.notes ? data.notes.trim() : '',
         createdAt: new Date().toISOString(),
+        paid: data.paid === undefined ? (data.type === 'expense' ? false : true) : !!data.paid,
         installment: {
           groupId,
           number: i + 1,
@@ -244,6 +248,8 @@ const DB = (() => {
       category: data.category,
       date: data.date,
       notes: data.notes ? data.notes.trim() : '',
+      // P5: preserva o status quando não informado (edição sem tocar no checkbox)
+      paid: data.paid === undefined ? transactions[index].paid : !!data.paid,
     };
 
     if (!updated.description || !rawAmount || !updated.category || !updated.date) {
@@ -268,7 +274,67 @@ const DB = (() => {
     return { success: true };
   }
 
-  function getTransactionsByFilters({ search, type, category, month, year } = {}) {
+  // --- Status de Pagamento (P5) ---
+  // `paid` é booleano explícito nas transações novas (despesa → a pagar,
+  // receita → recebida). Dados legados SEM o campo são tratados como pagos
+  // (histórico já liquidado) — `isPaid` nunca retorna undefined.
+
+  function isPaid(t) {
+    return t.paid !== false;
+  }
+
+  // Altera apenas o status de pagamento de uma transação (sem reescrever o resto)
+  function setTransactionPaid(id, paid) {
+    const transactions = getTransactions();
+    const index = transactions.findIndex(t => t.id === id);
+    if (index === -1) return { success: false, error: 'Transação não encontrada.' };
+    transactions[index] = { ...transactions[index], paid: !!paid };
+    saveTransactions(transactions);
+    return { success: true, transaction: transactions[index] };
+  }
+
+  // Despesas NÃO pagas, ordenadas por vencimento (mais antigas primeiro).
+  // daysOverdue: positivo = atrasada há N dias; 0 = vence hoje; negativo = vence em N dias.
+  function getUnpaidExpenses(refDateStr) {
+    const ref = refDateStr ? parseLocalDate(refDateStr) : new Date();
+    const today = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate());
+    return getTransactions()
+      .filter(t => t.type === 'expense' && !isPaid(t))
+      .map(t => {
+        const d = parseLocalDate(t.date);
+        return {
+          ...t,
+          daysOverdue: Math.round((today - d) / 86400000),
+        };
+      })
+      .sort((a, b) => a.date.localeCompare(b.date));
+  }
+
+  // Resumo de pendências: total a pagar, contagem e quanto está ATRASADO
+  function getPendingSummary(refDateStr) {
+    const unpaid = getUnpaidExpenses(refDateStr);
+    const total = unpaid.reduce((sum, t) => sum + t.amount, 0);
+    const overdue = unpaid.filter(t => t.daysOverdue > 0);
+    return {
+      total,
+      count: unpaid.length,
+      overdueCount: overdue.length,
+      overdueTotal: overdue.reduce((sum, t) => sum + t.amount, 0),
+    };
+  }
+
+  // Contas a pagar que vencem até `daysAhead` dias (inclui as já vencidas).
+  // Usado pelos alertas de vencimento no dashboard/assistente.
+  function getUpcomingPayments(daysAhead = 7, refDateStr) {
+    const ref = refDateStr ? parseLocalDate(refDateStr) : new Date();
+    const horizon = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate() + daysAhead);
+    return getUnpaidExpenses(refDateStr).filter(t => {
+      const d = parseLocalDate(t.date);
+      return d <= horizon;
+    });
+  }
+
+  function getTransactionsByFilters({ search, type, category, month, year, paid } = {}) {
     let transactions = getTransactions();
 
     if (search) {
@@ -282,6 +348,13 @@ const DB = (() => {
 
     if (type && type !== 'all') {
       transactions = transactions.filter(t => t.type === type);
+    }
+
+    // P5: filtro por status de pagamento ('paid' | 'unpaid')
+    if (paid === 'unpaid') {
+      transactions = transactions.filter(t => t.type === 'expense' && !isPaid(t));
+    } else if (paid === 'paid') {
+      transactions = transactions.filter(t => isPaid(t));
     }
 
     if (category && category !== 'all') {
@@ -762,6 +835,7 @@ const DB = (() => {
       date: dueDate,
       notes: rec.notes || '',
       createdAt: new Date().toISOString(),
+      paid: rec.type === 'expense' ? false : true,
       recurringId: rec.id,
       recurringDate: dueDate,
     };
@@ -1070,6 +1144,20 @@ const DB = (() => {
       });
     }
 
+    // 6. Contas a pagar (P5) — pendencias atrasadas e a vencer
+    const pending = getPendingSummary();
+    if (pending.count > 0) {
+      const plural = pending.count !== 1 ? 's' : '';
+      const text = pending.overdueCount > 0
+        ? `Você tem ${pending.overdueCount} conta${pending.overdueCount !== 1 ? 's' : ''} atrasada${pending.overdueCount !== 1 ? 's' : ''} e ${pending.count - pending.overdueCount} a vencer — ${formatMoney(pending.total)} em aberto.`
+        : `Você tem ${pending.count} conta${plural} a pagar, totalizando ${formatMoney(pending.total)}.`;
+      insights.push({
+        type: pending.overdueCount > 0 ? 'danger' : 'warning',
+        title: 'Contas a pagar',
+        text,
+      });
+    }
+
     return insights;
   }
 
@@ -1251,6 +1339,9 @@ const DB = (() => {
       date: t.date,
       notes: typeof t.notes === 'string' ? t.notes.trim() : '',
       createdAt: typeof t.createdAt === 'string' ? t.createdAt : new Date().toISOString(),
+      // P5: status de pagamento — booleano preservado; backup antigo sem o campo
+      // assume o padrão (despesa a pagar, receita recebida)
+      paid: typeof t.paid === 'boolean' ? t.paid : (t.type === 'expense' ? false : true),
     };
     // Marcação opcional de recorrente (preservada no backup)
     if (typeof t.recurringId === 'string' && t.recurringId) clean.recurringId = t.recurringId;
@@ -1411,6 +1502,12 @@ const DB = (() => {
     updateTransaction,
     deleteTransaction,
     getTransactionsByFilters,
+    // Payments (P5)
+    isPaid,
+    setTransactionPaid,
+    getUnpaidExpenses,
+    getPendingSummary,
+    getUpcomingPayments,
     // Installments (P4)
     addInstallments,
     getInstallmentGroup,
