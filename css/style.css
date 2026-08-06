@@ -1955,6 +1955,15 @@ table {
     flex-direction: column;
   }
 
+  .sidebar-actions .btn-icon {
+    width: auto;
+    flex: none;
+  }
+
+  .sidebar-total .value {
+    font-size: 1.1rem;
+  }
+
   .btn-icon {
     width: 100%;
     justify-content: center;
@@ -2319,6 +2328,20 @@ table {
 
   .empty-state {
     padding: var(--space-lg) var(--space-sm);
+    font-size: 0.85rem;
+  }
+
+  .sidebar-total .value {
+    font-size: 1rem;
+  }
+
+  .sidebar-actions {
+    gap: var(--space-xs);
+  }
+
+  .sidebar-actions .btn-icon {
+    width: 32px;
+    height: 32px;
     font-size: 0.85rem;
   }
 
