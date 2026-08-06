@@ -856,6 +856,19 @@ table {
   color: var(--color-expense-dark);
 }
 
+/* Badge de parcela (P4): mostra "1/12" ao lado da descrição */
+.badge-installment {
+  margin-left: 6px;
+  padding: 1px 8px;
+  border-radius: var(--radius-full);
+  font-size: 0.7rem;
+  font-weight: 700;
+  background: #eef2ff;
+  color: #4338ca;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
 .table .actions {
   display: flex;
   gap: var(--space-xs);

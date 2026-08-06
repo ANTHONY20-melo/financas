@@ -204,7 +204,7 @@ test('P2: exportAllData inclui recurring e import roundtrip preserva', () => {
   addMonthlyRecurring();
   const exported = DB.exportAllData();
   assert.equal(exported.recurring.length, 1);
-  assert.equal(exported.version, '2.1');
+  assert.equal(exported.version, '2.2');
 
   reset();
   const imported = DB.importAllData(exported);

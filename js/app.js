@@ -237,6 +237,9 @@ const App = (() => {
     } else {
       recentContainer.innerHTML = recent.map(t => {
         const cat = DB.getCategory(t.category);
+        const instBadge = t.installment
+          ? `<span class="badge badge-installment" title="Parcela ${t.installment.number} de ${t.installment.total}">${t.installment.number}/${t.installment.total}</span>`
+          : '';
         return `
           <div class="transaction-item">
             <div class="transaction-item-left">
@@ -244,7 +247,7 @@ const App = (() => {
                 <i class="${safeIcon(cat ? cat.icon : 'fa-solid fa-receipt')}"></i>
               </div>
               <div class="transaction-item-info">
-                <span class="transaction-item-desc">${esc(t.description)}</span>
+                <span class="transaction-item-desc">${esc(t.description)}${instBadge}</span>
                 <span class="transaction-item-meta">
                   ${formatDate(t.date)} — ${esc(cat ? cat.name : 'Sem categoria')}
                 </span>
@@ -460,11 +463,19 @@ const App = (() => {
       tbody.innerHTML = transactions.map(t => {
         const cat = DB.getCategory(t.category);
         const catName = cat ? cat.name : 'Sem categoria';
+        const instBadge = t.installment
+          ? `<span class="badge badge-installment" title="Parcela ${t.installment.number} de ${t.installment.total}">${t.installment.number}/${t.installment.total}</span>`
+          : '';
+        const groupBtn = t.installment
+          ? `<button class="btn-delete" onclick="App.deleteInstallmentGroup('${t.installment.groupId}')" title="Excluir todas as parcelas (${t.installment.total}x)">
+              <i class="fa-solid fa-layer-group"></i>
+            </button>`
+          : '';
         return `
           <tr>
             <td>${formatDate(t.date)}</td>
             <td>
-              <strong>${esc(t.description)}</strong>
+              <strong>${esc(t.description)}</strong>${instBadge}
               ${t.notes ? `<br><small class="text-muted">${esc(t.notes)}</small>` : ''}
             </td>
             <td>
@@ -484,6 +495,7 @@ const App = (() => {
                 <button class="btn-delete" onclick="App.deleteTransaction('${t.id}')" title="Excluir">
                   <i class="fas fa-trash-alt"></i>
                 </button>
+                ${groupBtn}
               </div>
             </td>
           </tr>
@@ -552,12 +564,43 @@ const App = (() => {
         $('#transactionDate').value = t.date;
         $('#transactionNotes').value = t.notes || '';
         updateCategorySelect(t.type, t.category);
+        // Parcelas: em edição de uma parcela gerada, o campo fica oculto
+        // (não faz sentido "reparcelar" uma parcela já criada — exclua e recrie)
+        const instField = $('#transactionInstallments');
+        const instHint = $('#installmentHint');
+        if (t.installment) {
+          instField.style.display = 'none';
+          instHint.style.display = 'none';
+        } else {
+          instField.style.display = '';
+          instField.value = '1';
+          instHint.style.display = 'none';
+        }
       }
     } else {
       title.textContent = 'Nova Transação';
+      const instField = $('#transactionInstallments');
+      instField.style.display = '';
+      instField.value = '1';
+      $('#installmentHint').style.display = 'none';
     }
 
     openModal('transactionModal');
+  }
+
+  // Popula o select de parcelas (2..48) e controla a dica
+  function setupTransactionInstallments() {
+    const select = $('#transactionInstallments');
+    const hint = $('#installmentHint');
+    for (let i = 2; i <= 48; i++) {
+      const opt = document.createElement('option');
+      opt.value = String(i);
+      opt.textContent = `${i}x — parcelado`;
+      select.appendChild(opt);
+    }
+    select.addEventListener('change', () => {
+      hint.style.display = select.value !== '1' ? 'block' : 'none';
+    });
   }
 
   function updateCategorySelect(type, selectedId = null) {
@@ -578,6 +621,7 @@ const App = (() => {
       category: $('#transactionCategory').value,
       date: $('#transactionDate').value,
       notes: $('#transactionNotes').value,
+      installments: $('#transactionInstallments').value,
     };
 
     let result;
@@ -589,7 +633,13 @@ const App = (() => {
 
     if (result.success) {
       closeModal('transactionModal');
-      showToast(id ? 'Transação atualizada!' : 'Transação adicionada!', 'success');
+      const count = result.transactions ? result.transactions.length : 1;
+      const msg = id
+        ? 'Transação atualizada!'
+        : count > 1
+          ? `${count} parcelas criadas!`
+          : 'Transação adicionada!';
+      showToast(msg, 'success');
       renderDashboard();
       renderTransactions();
       checkBudgetAlerts();
@@ -613,6 +663,26 @@ const App = (() => {
         showToast('Transação excluída!', 'success');
         renderDashboard();
         renderTransactions();
+      } else {
+        showToast(result.error, 'error');
+      }
+    }
+  };
+
+  window.App.deleteInstallmentGroup = async function (groupId) {
+    const group = DB.getInstallmentGroup(groupId);
+    const total = group.length > 0 ? group[0].installment.total : 0;
+    const confirmed = await showConfirm(
+      'Excluir Parcelas',
+      `Tem certeza que deseja excluir TODAS as ${total} parcelas deste grupo? Esta ação não pode ser desfeita.`
+    );
+    if (confirmed) {
+      const result = DB.deleteInstallmentGroup(groupId);
+      if (result.success) {
+        showToast(`${result.count} parcelas excluídas!`, 'success');
+        renderDashboard();
+        renderTransactions();
+        checkBudgetAlerts();
       } else {
         showToast(result.error, 'error');
       }
@@ -1890,6 +1960,7 @@ const App = (() => {
 
     // --- Transaction Form ---
     $('#transactionForm').addEventListener('submit', saveTransaction);
+    setupTransactionInstallments();
     $('#transactionType').addEventListener('change', (e) => {
       const catSelect = $('#transactionCategory');
       const cats = DB.getCategoriesByType(e.target.value);
@@ -1991,7 +2062,7 @@ const App = (() => {
 
     // --- Navigation from URL hash ---
     const hash = window.location.hash.replace('#', '');
-    const validPages = ['dashboard', 'transacoes', 'categorias', 'orcamentos', 'assistente', 'relatorios'];
+    const validPages = ['dashboard', 'transacoes', 'categorias', 'orcamentos', 'recorrentes', 'assistente', 'relatorios'];
     const page = validPages.includes(hash) ? hash : 'dashboard';
     navigateTo(page);
 
@@ -2014,6 +2085,7 @@ const App = (() => {
     init,
     editTransaction: window.App.editTransaction,
     deleteTransaction: window.App.deleteTransaction,
+    deleteInstallmentGroup: window.App.deleteInstallmentGroup,
     editCategory: window.App.editCategory,
     deleteCategory: window.App.deleteCategory,
     editGoal: window.App.editGoal,

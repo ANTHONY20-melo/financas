@@ -110,6 +110,19 @@ const DB = (() => {
   }
 
   function addTransaction(data) {
+    // Parcelamento (P4): se o campo veio preenchido, 1/'1' = à vista (caminho normal);
+    // inteiro 2..48 gera parcelas; qualquer outro valor (0, negativo, decimal, >48,
+    // texto) = erro zero-trust.
+    if (data.installments !== undefined && data.installments !== null && data.installments !== '') {
+      const numInstallments = Number(data.installments);
+      if (numInstallments !== 1) {
+        if (!Number.isInteger(numInstallments) || numInstallments < 2 || numInstallments > MAX_INSTALLMENTS) {
+          return { success: false, error: `Número de parcelas inválido (2 a ${MAX_INSTALLMENTS}).` };
+        }
+        return addInstallments(data);
+      }
+    }
+
     const transactions = getTransactions();
     const rawAmount = parseFloat(data.amount);
     const transaction = {
@@ -134,6 +147,87 @@ const DB = (() => {
     transactions.push(transaction);
     saveTransactions(transactions);
     return { success: true, transaction };
+  }
+
+  // --- Parcelamento (P4) ---
+  // Gera N transações reais (uma por mês a partir da data informada), cada uma
+  // marcada com `installment: { groupId, number, total }`. Transações reais
+  // alimentam dashboard/orçamentos/relatórios sem mudança; o grupo fica
+  // rastreável via `groupId` (excluir todas de uma vez).
+
+  const MAX_INSTALLMENTS = 48;
+
+  // Data da parcela `index` (0-based): mesmo dia da data inicial no mês seguinte,
+  // com clamp ao último dia do mês (lição do P2: dia 31 em mês de 30 → dia 30).
+  // Atenção: o mês do split é 1-based; new Date(y, m, 1) espera 0-based.
+  function installmentDate(startDate, index) {
+    const [y, m, d] = startDate.split('-').map(Number);
+    const target = new Date(y, m - 1 + index, 1);
+    const day = clampDay(target.getFullYear(), target.getMonth(), d);
+    return formatLocalDate(new Date(target.getFullYear(), target.getMonth(), day));
+  }
+
+  function addInstallments(data) {
+    const installments = Number(data.installments);
+    const rawAmount = parseFloat(data.amount);
+
+    // Zero-trust: valida o número de parcelas ANTES de gerar
+    if (!Number.isInteger(installments) || installments < 2 || installments > MAX_INSTALLMENTS) {
+      return { success: false, error: `Número de parcelas inválido (2 a ${MAX_INSTALLMENTS}).` };
+    }
+
+    const description = data.description.trim();
+    if (!description || !rawAmount || !data.category || !data.date) {
+      return { success: false, error: 'Preencha todos os campos obrigatórios.' };
+    }
+    if (!Number.isFinite(rawAmount) || rawAmount <= 0) {
+      return { success: false, error: 'O valor deve ser maior que zero.' };
+    }
+
+    const groupId = 'grp_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+    const transactions = getTransactions();
+    const created = [];
+
+    for (let i = 0; i < installments; i++) {
+      const transaction = {
+        id: 'txn_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6) + '_' + i,
+        description,
+        amount: Math.abs(rawAmount),
+        type: data.type,
+        category: data.category,
+        date: installmentDate(data.date, i),
+        notes: data.notes ? data.notes.trim() : '',
+        createdAt: new Date().toISOString(),
+        installment: {
+          groupId,
+          number: i + 1,
+          total: installments,
+        },
+      };
+      transactions.push(transaction);
+      created.push(transaction);
+    }
+
+    saveTransactions(transactions);
+    return { success: true, transactions: created };
+  }
+
+  // Retorna todas as parcelas de um grupo (ordenadas por número)
+  function getInstallmentGroup(groupId) {
+    return getTransactions()
+      .filter(t => t.installment && t.installment.groupId === groupId)
+      .sort((a, b) => a.installment.number - b.installment.number);
+  }
+
+  // Exclui TODAS as parcelas do grupo de uma vez
+  function deleteInstallmentGroup(groupId) {
+    const transactions = getTransactions();
+    const filtered = transactions.filter(t => !(t.installment && t.installment.groupId === groupId));
+    if (filtered.length === transactions.length) {
+      return { success: false, error: 'Grupo de parcelas não encontrado.' };
+    }
+    saveTransactions(filtered);
+    return { success: true, count: transactions.length - filtered.length };
   }
 
   function updateTransaction(id, data) {
@@ -584,9 +678,11 @@ const DB = (() => {
     return null;
   }
 
-  // Próxima ocorrência semanal: dia da semana `day` (0=Dom..6=Sáb), âncora = startDate
+  // Próxima ocorrência semanal: dia da semana `day` (0=Dom..6=Sáb).
+  // Âncora: startDate se definido (e futuro), senão o próprio `from` —
+  // NUNCA new Date() (isso tornaria o resultado dependente da data atual).
   function nextWeeklyDate(rec, from) {
-    const anchor = rec.startDate ? parseLocalDate(rec.startDate) : new Date();
+    const anchor = rec.startDate ? parseLocalDate(rec.startDate) : from;
     const start = anchor > from ? anchor : from;
     const diff = (rec.day - start.getDay() + 7) % 7;
     return new Date(start.getFullYear(), start.getMonth(), start.getDate() + diff);
@@ -1124,7 +1220,7 @@ const DB = (() => {
       goals: getGoals(),
       recurring: getRecurring(),
       exportedAt: new Date().toISOString(),
-      version: '2.1',
+      version: '2.2',
     };
   }
 
@@ -1159,6 +1255,19 @@ const DB = (() => {
     // Marcação opcional de recorrente (preservada no backup)
     if (typeof t.recurringId === 'string' && t.recurringId) clean.recurringId = t.recurringId;
     if (typeof t.recurringDate === 'string' && DATE_RE.test(t.recurringDate)) clean.recurringDate = t.recurringDate;
+    // Marcação opcional de parcela (P4): só preserva metadata válida
+    if (t.installment && typeof t.installment === 'object') {
+      const instNum = Number(t.installment.number);
+      const instTotal = Number(t.installment.total);
+      if (
+        typeof t.installment.groupId === 'string' && t.installment.groupId &&
+        Number.isInteger(instNum) && instNum >= 1 &&
+        Number.isInteger(instTotal) && instTotal >= 1 &&
+        instNum <= instTotal
+      ) {
+        clean.installment = { groupId: t.installment.groupId, number: instNum, total: instTotal };
+      }
+    }
     return clean;
   }
 
@@ -1302,6 +1411,10 @@ const DB = (() => {
     updateTransaction,
     deleteTransaction,
     getTransactionsByFilters,
+    // Installments (P4)
+    addInstallments,
+    getInstallmentGroup,
+    deleteInstallmentGroup,
     // Categories
     getCategories,
     getCategoriesByType,

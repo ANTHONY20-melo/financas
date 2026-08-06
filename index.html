@@ -550,6 +550,15 @@
           </div>
         </div>
         <div class="form-group">
+          <label for="transactionInstallments" class="form-label">Parcelas</label>
+          <select id="transactionInstallments" class="form-select">
+            <option value="1">À vista (1x)</option>
+          </select>
+          <small class="form-hint" id="installmentHint" style="display:none;">
+            Serão geradas parcelas mensais automaticamente, uma por mês.
+          </small>
+        </div>
+        <div class="form-group">
           <label for="transactionNotes" class="form-label">Observações (opcional)</label>
           <textarea id="transactionNotes" class="form-input form-textarea" placeholder="Notas adicionais..."></textarea>
         </div>
