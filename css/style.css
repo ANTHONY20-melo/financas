@@ -1960,3 +1960,52 @@ table {
     justify-content: center;
   }
 }
+
+/* ============================================
+   Nuvem (sync sem login)
+   ============================================ */
+.sync-code-box {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  background: var(--color-surface-alt, #f8fafc);
+  border: 1px dashed var(--color-border, #d1d5db);
+  border-radius: var(--radius, 8px);
+  padding: var(--space-sm) var(--space-md);
+  width: fit-content;
+  margin-bottom: var(--space-sm);
+}
+
+.sync-code {
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: var(--color-primary, #2563eb);
+  user-select: all;
+}
+
+.btn-danger-outline {
+  border-color: var(--color-expense);
+  color: var(--color-expense);
+  background: transparent;
+}
+
+.btn-danger-outline:hover {
+  background: var(--color-expense-bg);
+  color: var(--color-expense);
+}
+
+.text-muted.small,
+.small {
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
+#page-nuvem .card {
+  max-width: 680px;
+}
+
+#page-nuvem .card-alert {
+  grid-column: auto;
+}

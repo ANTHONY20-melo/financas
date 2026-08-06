@@ -55,6 +55,10 @@
           <i class="fas fa-chart-bar"></i>
           <span>Relatórios</span>
         </a>
+        <a href="#nuvem" class="nav-item" data-page="nuvem">
+          <i class="fas fa-cloud"></i>
+          <span>Nuvem</span>
+        </a>
       </nav>
       <div class="sidebar-footer">
         <div class="sidebar-total">
@@ -525,6 +529,69 @@
             </div>
           </div>
         </section>
+
+        <!-- Cloud Sync Page -->
+        <section id="page-nuvem" class="page">
+          <div class="card">
+            <div class="card-header">
+              <h3><i class="fas fa-cloud"></i> Sincronização na Nuvem</h3>
+            </div>
+            <div class="card-body">
+              <p class="text-muted" style="margin-bottom: var(--space-md);">
+                Guarde seus dados com segurança e use em <strong>vários celulares</strong> (Android, iPhone, PC)
+                <strong>sem login</strong>. Seus dados ficam criptografados no próprio aparelho — nem a nuvem
+                consegue ler o que você registra.
+              </p>
+
+              <!-- Estado: não configurado (anon key ausente) -->
+              <div id="syncNotConfigured" class="card-alert danger" style="display:none;">
+                <i class="fas fa-triangle-exclamation"></i>
+                <span>Nuvem ainda não configurada neste build. Entre em contato com o suporte.</span>
+              </div>
+
+              <!-- Estado: sem código ativo -->
+              <div id="syncNotActive" style="display:none;">
+                <p class="text-muted" style="margin-bottom: var(--space-sm);">Crie um código para este aparelho:</p>
+                <div class="form-actions" style="justify-content: flex-start; flex-wrap: wrap;">
+                  <button id="createSpaceBtn" class="btn btn-primary">
+                    <i class="fas fa-magic"></i> Criar meu código
+                  </button>
+                  <span class="text-muted" style="align-self: center;">ou</span>
+                  <input id="enterCodeInput" type="text" class="form-input" placeholder="Cole seu código: K7Q9-M2X4-ART8" style="max-width: 260px;" autocomplete="off" autocapitalize="characters" spellcheck="false">
+                  <button id="enterCodeBtn" class="btn btn-outline">
+                    <i class="fas fa-cloud-upload-alt"></i> Ativar
+                  </button>
+                </div>
+                <p class="text-muted small" style="margin-top: var(--space-sm);">
+                  <i class="fas fa-info-circle"></i> Quem tiver o código tem acesso ao mesmo espaço de dados.
+                  Use o mesmo código em todos os seus aparelhos para sincronizar.
+                </p>
+              </div>
+
+              <!-- Estado: código ativo -->
+              <div id="syncActive" style="display:none;">
+                <div class="sync-code-box">
+                  <span id="syncCodeDisplay" class="sync-code"></span>
+                  <button id="copyCodeBtn" class="btn-icon" title="Copiar código">
+                    <i class="fas fa-copy"></i>
+                  </button>
+                </div>
+                <p id="syncStatus" class="text-muted small" style="margin: var(--space-sm) 0 var(--space-md);"></p>
+                <div class="form-actions" style="justify-content: flex-start; flex-wrap: wrap;">
+                  <button id="syncNowBtn" class="btn btn-primary">
+                    <i class="fas fa-sync-alt"></i> Sincronizar agora
+                  </button>
+                  <button id="deactivateSpaceBtn" class="btn btn-outline btn-danger-outline">
+                    <i class="fas fa-unlink"></i> Desativar neste aparelho
+                  </button>
+                </div>
+                <p class="text-muted small" style="margin-top: var(--space-sm);">
+                  Desativar apenas desconecta <strong>este aparelho</strong>. Seus dados na nuvem e neste aparelho permanecem.
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
       </div>
     </main>
   </div>
@@ -809,6 +876,7 @@
 
   <script src="vendor/chart.umd.min.js"></script>
   <script src="js/storage.js"></script>
+  <script src="js/sync.js"></script>
   <script src="js/app.js"></script>
   <script>
     // PWA: registra o Service Worker (cache offline + instalável)

@@ -175,6 +175,7 @@ const App = (() => {
       recorrentes: { title: 'Recorrentes', subtitle: 'Lançamentos automáticos e próximos vencimentos' },
       assistente: { title: 'Assistente', subtitle: 'Metas, insights e projeções inteligentes' },
       relatorios: { title: 'Relatórios', subtitle: 'Análise detalhada das suas finanças' },
+      nuvem: { title: 'Nuvem', subtitle: 'Sincronização e backup na nuvem' },
     };
 
     const info = titles[page] || titles.dashboard;
@@ -190,6 +191,7 @@ const App = (() => {
       case 'recorrentes': renderRecurring(); break;
       case 'assistente': renderAssistant(); break;
       case 'relatorios': renderReports(); break;
+      case 'nuvem': renderSync(); break;
     }
 
     // Close sidebar on mobile
@@ -693,6 +695,7 @@ const App = (() => {
     }
 
     if (result.success) {
+      Sync.markDirty();
       closeModal('transactionModal');
       const count = result.transactions ? result.transactions.length : 1;
       const msg = id
@@ -721,6 +724,7 @@ const App = (() => {
     if (confirmed) {
       const result = DB.deleteTransaction(id);
       if (result.success) {
+        Sync.markDirty();
         showToast('Transação excluída!', 'success');
         renderDashboard();
         renderTransactions();
@@ -740,6 +744,7 @@ const App = (() => {
     if (confirmed) {
       const result = DB.deleteInstallmentGroup(groupId);
       if (result.success) {
+        Sync.markDirty();
         showToast(`${result.count} parcelas excluídas!`, 'success');
         renderDashboard();
         renderTransactions();
@@ -757,6 +762,7 @@ const App = (() => {
     const next = !DB.isPaid(t);
     const result = DB.setTransactionPaid(id, next);
     if (result.success) {
+      Sync.markDirty();
       showToast(next ? 'Marcada como paga!' : 'Marcada como a pagar', 'success');
       renderDashboard();
       renderTransactions();
@@ -885,6 +891,7 @@ const App = (() => {
     }
 
     if (result.success) {
+      Sync.markDirty();
       closeModal('categoryModal');
       showToast(id ? 'Categoria atualizada!' : 'Categoria criada!', 'success');
       renderCategories();
@@ -904,6 +911,7 @@ const App = (() => {
     if (confirmed) {
       const result = DB.deleteCategory(id);
       if (result.success) {
+        Sync.markDirty();
         showToast('Categoria excluída!', 'success');
         renderCategories();
         setupTransactionFilters();
@@ -1039,6 +1047,7 @@ const App = (() => {
     }
 
     if (result.success) {
+      Sync.markDirty();
       closeModal('budgetModal');
       showToast(id ? 'Orçamento atualizado!' : 'Orçamento definido!', 'success');
       renderBudgets();
@@ -1064,6 +1073,7 @@ const App = (() => {
     if (confirmed) {
       const result = DB.deleteBudget(id);
       if (result.success) {
+        Sync.markDirty();
         showToast('Orçamento excluído!', 'success');
         renderBudgets();
       }
@@ -1243,6 +1253,7 @@ const App = (() => {
     }
 
     if (result.success) {
+      Sync.markDirty();
       closeModal('recurringModal');
       showToast(id ? 'Recorrente atualizada!' : 'Recorrente criada!', 'success');
       renderRecurring();
@@ -1256,6 +1267,7 @@ const App = (() => {
     if (confirmed) {
       const result = DB.deleteRecurring(id);
       if (result.success) {
+        Sync.markDirty();
         showToast('Recorrente excluída!', 'success');
         renderRecurring();
       } else {
@@ -1269,6 +1281,7 @@ const App = (() => {
     if (!rec) return;
     const result = DB.updateRecurring(id, { ...rec, active: !rec.active });
     if (result.success) {
+      Sync.markDirty();
       showToast(rec.active ? 'Recorrente pausada.' : 'Recorrente reativada!', 'success');
       renderRecurring();
     }
@@ -1280,6 +1293,7 @@ const App = (() => {
     const monthStr = getCurrentMonthStr();
     const result = DB.generateRecurringTransaction(id, monthStr);
     if (result.success) {
+      Sync.markDirty();
       showToast(`Lançamento de ${formatCurrency(rec.amount)} criado!`, 'success');
       renderRecurring();
       renderDashboard();
@@ -1591,6 +1605,7 @@ const App = (() => {
     }
 
     if (result.success) {
+      Sync.markDirty();
       closeModal('goalModal');
       showToast(id ? 'Meta atualizada!' : 'Meta criada!', 'success');
       renderGoals();
@@ -1618,6 +1633,7 @@ const App = (() => {
     const result = DB.addGoalContribution(id, amount);
 
     if (result.success) {
+      Sync.markDirty();
       closeModal('contributionModal');
       showToast('Valor adicionado à meta!', 'success');
       renderGoals();
@@ -1631,6 +1647,7 @@ const App = (() => {
     if (confirmed) {
       const result = DB.deleteGoal(id);
       if (result.success) {
+        Sync.markDirty();
         showToast('Meta excluída!', 'success');
         renderGoals();
       } else {
@@ -1953,6 +1970,7 @@ const App = (() => {
         const result = DB.importAllData(data);
 
         if (result.success) {
+          Sync.markDirty();
           showToast('Dados importados com sucesso!', 'success');
           navigateTo(currentPage); // Refresh
         } else {
@@ -1999,9 +2017,124 @@ const App = (() => {
       if (confirmed2) {
         Storage.clear();
         DB.init();
+        Sync.markDirty();
         showToast('Dados limpos com sucesso!', 'success');
         navigateTo(currentPage);
       }
+    }
+  }
+
+  // ==========================================
+  // CLOUD SYNC (página Nuvem)
+  // ==========================================
+  function renderSync() {
+    const state = Sync.getState();
+
+    $('#syncNotConfigured').style.display = state.configured ? 'none' : 'flex';
+    $('#syncNotActive').style.display = (!state.configured || state.active) ? 'none' : 'block';
+    $('#syncActive').style.display = (state.configured && state.active) ? 'block' : 'none';
+
+    if (state.configured && state.active) {
+      $('#syncCodeDisplay').textContent = state.code;
+      $('#syncStatus').textContent = state.lastSync > 0
+        ? `Última sincronização: ${new Date(state.lastSync).toLocaleString('pt-BR')}`
+        : 'Nunca sincronizado. Toque em "Sincronizar agora".';
+    }
+  }
+
+  async function handleCreateSpace() {
+    const btn = $('#createSpaceBtn');
+    btn.disabled = true;
+    try {
+      const res = await Sync.createSpace();
+      if (res.ok) {
+        renderSync();
+        showToast(`Código criado: ${res.code}`, 'success', 5000);
+        Sync.markDirty(); // garante push inicial dos dados atuais
+        renderSync();
+      } else {
+        showToast(res.error || 'Não foi possível criar o código.', 'error');
+      }
+    } catch {
+      showToast('Sem conexão com a nuvem.', 'error');
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  async function handleEnterCode() {
+    const input = $('#enterCodeInput');
+    const code = input.value.trim();
+    if (!code) {
+      showToast('Digite o código do seu espaço.', 'warning');
+      return;
+    }
+    const btn = $('#enterCodeBtn');
+    btn.disabled = true;
+    try {
+      const res = await Sync.activateCode(code);
+      input.value = '';
+      renderSync();
+      if (res.ok) {
+        showToast(res.exists ? 'Dados sincronizados!' : 'Espaço ativado!', 'success');
+        navigateTo(currentPage);
+        renderSync();
+      } else {
+        showToast(res.error || 'Não foi possível ativar o código.', 'error');
+      }
+    } catch {
+      showToast('Sem conexão com a nuvem.', 'error');
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  async function handleSyncNow() {
+    const btn = $('#syncNowBtn');
+    btn.disabled = true;
+    try {
+      const res = await Sync.syncNow();
+      renderSync();
+      if (res.ok) {
+        showToast(res.synced === 'push'
+          ? 'Dados enviados para a nuvem!'
+          : res.synced === 'pull'
+            ? 'Dados atualizados deste aparelho!'
+            : 'Tudo sincronizado!', 'success');
+      } else {
+        showToast(res.error || 'Falha na sincronização.', 'error');
+      }
+    } catch {
+      showToast('Sem conexão com a nuvem.', 'error');
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  function handleCopyCode() {
+    const code = $('#syncCodeDisplay').textContent;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(code).then(() => showToast('Código copiado!', 'success'));
+    } else {
+      const ta = document.createElement('textarea');
+      ta.value = code;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      showToast('Código copiado!', 'success');
+    }
+  }
+
+  async function handleDeactivateSpace() {
+    const confirmed = await showConfirm(
+      'Desativar Nuvem',
+      'Desconectar este aparelho do espaço? Seus dados na nuvem e neste aparelho permanecem.'
+    );
+    if (confirmed) {
+      Sync.deactivate();
+      renderSync();
+      showToast('Nuvem desativada neste aparelho.', 'success');
     }
   }
 
@@ -2131,6 +2264,24 @@ const App = (() => {
     $('#clearDataBtn').addEventListener('click', clearAllData);
     $('#exportTransactionsBtn').addEventListener('click', exportTransactionsCSV);
 
+    // --- Cloud Sync ---
+    $('#createSpaceBtn').addEventListener('click', handleCreateSpace);
+    $('#enterCodeBtn').addEventListener('click', handleEnterCode);
+    $('#syncNowBtn').addEventListener('click', handleSyncNow);
+    $('#copyCodeBtn').addEventListener('click', handleCopyCode);
+    $('#deactivateSpaceBtn').addEventListener('click', handleDeactivateSpace);
+    $('#enterCodeInput').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') handleEnterCode();
+    });
+    // Quando um pull aplica dados remotos, re-renderiza a UI
+    if (typeof Sync !== 'undefined' && Sync.setOnApplied) {
+      Sync.setOnApplied(() => {
+        navigateTo(currentPage);
+        checkBudgetAlerts();
+        renderSync();
+      });
+    }
+
     // --- Chart Period ---
     $('#incomeExpenseChartPeriod').addEventListener('change', renderIncomeExpenseChart);
     $('#expensePieChartPeriod').addEventListener('change', renderExpensePieChart);
@@ -2144,12 +2295,17 @@ const App = (() => {
 
     // --- Navigation from URL hash ---
     const hash = window.location.hash.replace('#', '');
-    const validPages = ['dashboard', 'transacoes', 'categorias', 'orcamentos', 'recorrentes', 'assistente', 'relatorios'];
+    const validPages = ['dashboard', 'transacoes', 'categorias', 'orcamentos', 'recorrentes', 'assistente', 'relatorios', 'nuvem'];
     const page = validPages.includes(hash) ? hash : 'dashboard';
     navigateTo(page);
 
     // Badge inicial de alertas de orçamento
     checkBudgetAlerts();
+
+    // Sync inicial: se há um código ativo e configurado, puxa os dados da nuvem
+    if (typeof Sync !== 'undefined' && Sync.isConfigured && Sync.isConfigured() && Sync.isActive && Sync.isActive()) {
+      Sync.syncNow().catch(() => {});
+    }
 
     // Welcome toast
     setTimeout(() => {
