@@ -89,3 +89,25 @@ $$;
 revoke all on table public.space_snapshots from anon, authenticated;
 grant execute on function public.space_save(text, text, text, text, integer) to anon;
 grant execute on function public.space_get(text) to anon;
+
+-- ============================================
+-- space_delete — apaga o snapshot do espaço (para "apagar meu espaço")
+-- ============================================
+-- Só quem sabe o código consegue derivar o space_id correto (SHA-256).
+-- Chama SOMENTE com o código já validado no cliente.
+create or replace function public.space_delete(p_space_id text)
+returns json
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if p_space_id is null or length(p_space_id) < 16 then
+    return json_build_object('ok', false, 'error', 'space_id inválido');
+  end if;
+  delete from public.space_snapshots where space_id = p_space_id;
+  return json_build_object('ok', true, 'deleted', found);
+end;
+$$;
+
+grant execute on function public.space_delete(text) to anon;

@@ -13,6 +13,7 @@ const PRECACHE = [
   './css/style.css',
   './js/storage.js',
   './js/sync.js',
+  './js/notifications.js',
   './js/app.js',
   './vendor/chart.umd.min.js',
   './vendor/fontawesome/css/all.min.css',
@@ -85,6 +86,121 @@ self.addEventListener('fetch', (event) => {
         })
         .catch(() => cached);
       return cached || fetchPromise;
+    })
+  );
+});
+
+/* ============================================
+   LEMBRETES DE VENCIMENTO
+   Notificações agendadas (100% locais). O app envia a lista via
+   message → gravamos no IndexedDB e agendamos com TimestampTrigger.
+   ============================================ */
+
+const REMINDERS_DB = 'financas-reminders';
+const REMINDERS_STORE = 'reminders';
+
+function openRemindersDb() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(REMINDERS_DB, 1);
+    req.onupgradeneeded = () => {
+      req.result.createObjectStore(REMINDERS_STORE, { keyPath: 'tag' });
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+function remindersTx(mode, fn) {
+  return openRemindersDb().then(
+    (db) =>
+      new Promise((resolve, reject) => {
+        const tx = db.transaction(REMINDERS_STORE, mode);
+        const store = tx.objectStore(REMINDERS_STORE);
+        let out;
+        try {
+          out = fn(store);
+        } catch (err) {
+          tx.abort();
+          db.close();
+          reject(err);
+          return;
+        }
+        tx.oncomplete = () => {
+          db.close();
+          resolve(out && out.result);
+        };
+        tx.onerror = () => {
+          db.close();
+          reject(tx.error);
+        };
+      })
+  );
+}
+
+function clearReminders() {
+  return remindersTx('readwrite', (store) => store.clear());
+}
+
+function scheduleReminder(r) {
+  // Só agenda com TimestampTrigger se o browser suportar (Chrome/Edge).
+  // Sem suporte (Safari/iPhone) → fallback in-app, nada aqui.
+  if (!('showTrigger' in Notification.prototype)) return;
+  if (!r || !r.tag || !r.timestamp) return;
+  return self.registration.showNotification(r.title, {
+    body: r.body,
+    tag: r.tag,
+    icon: './icons/icon-192.png',
+    badge: './icons/icon-192.png',
+    data: { date: r.date, id: r.id },
+    showTrigger: new TimestampTrigger(r.timestamp),
+  });
+}
+
+self.addEventListener('message', (event) => {
+  const data = event.data || {};
+
+  // Substitui TODAS as agendadas pela nova lista (tags únicas por txn+data
+  // fazem o navegador substituir pendentes da mesma tag → sem duplicatas).
+  if (data.type === 'schedule-reminders' && Array.isArray(data.reminders)) {
+    event.waitUntil(
+      clearReminders()
+        .then(() => Promise.all(data.reminders.map(scheduleReminder)))
+        .then(() => {
+          if (event.ports && event.ports[0]) event.ports[0].postMessage({ ok: true });
+        })
+        .catch(() => {
+          if (event.ports && event.ports[0]) event.ports[0].postMessage({ ok: false });
+        })
+    );
+    return;
+  }
+
+  if (data.type === 'cancel-reminders') {
+    event.waitUntil(
+      clearReminders()
+        .then(() => {
+          if (event.ports && event.ports[0]) event.ports[0].postMessage({ ok: true });
+        })
+        .catch(() => {
+          if (event.ports && event.ports[0]) event.ports[0].postMessage({ ok: false });
+        })
+    );
+    return;
+  }
+});
+
+// Clique na notificação → foca o app na página Nuvem (ou abre).
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+      for (const client of list) {
+        if ('focus' in client) {
+          client.focus();
+          return;
+        }
+      }
+      return clients.openWindow('./index.html#nuvem');
     })
   );
 });

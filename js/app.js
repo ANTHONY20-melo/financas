@@ -707,6 +707,7 @@ const App = (() => {
       renderDashboard();
       renderTransactions();
       checkBudgetAlerts();
+      refreshReminders(); // novas pendências → re-planeja lembretes
     } else {
       showToast(result.error, 'error');
     }
@@ -728,6 +729,7 @@ const App = (() => {
         showToast('Transação excluída!', 'success');
         renderDashboard();
         renderTransactions();
+        refreshReminders();
       } else {
         showToast(result.error, 'error');
       }
@@ -749,6 +751,7 @@ const App = (() => {
         renderDashboard();
         renderTransactions();
         checkBudgetAlerts();
+        refreshReminders();
       } else {
         showToast(result.error, 'error');
       }
@@ -767,6 +770,7 @@ const App = (() => {
       renderDashboard();
       renderTransactions();
       checkBudgetAlerts();
+      refreshReminders(); // paga → remove do agendamento
     } else {
       showToast(result.error, 'error');
     }
@@ -1973,6 +1977,7 @@ const App = (() => {
           Sync.markDirty();
           showToast('Dados importados com sucesso!', 'success');
           navigateTo(currentPage); // Refresh
+          refreshReminders(); // pendências mudaram com o import
         } else {
           showToast(result.error, 'error');
         }
@@ -2020,6 +2025,7 @@ const App = (() => {
         Sync.markDirty();
         showToast('Dados limpos com sucesso!', 'success');
         navigateTo(currentPage);
+        refreshReminders(); // nada mais a agendar
       }
     }
   }
@@ -2040,6 +2046,9 @@ const App = (() => {
         ? `Última sincronização: ${new Date(state.lastSync).toLocaleString('pt-BR')}`
         : 'Nunca sincronizado. Toque em "Sincronizar agora".';
     }
+
+    // Card de lembretes é renderizado junto com a página Nuvem
+    renderReminders();
   }
 
   async function handleCreateSpace() {
@@ -2136,6 +2145,135 @@ const App = (() => {
       renderSync();
       showToast('Nuvem desativada neste aparelho.', 'success');
     }
+  }
+
+  async function handleDeleteSpace() {
+    const confirmed = await showConfirm(
+      'Apagar espaço na nuvem',
+      'Apagar TODOS os dados deste espaço na nuvem? Isso é permanente e afeta TODOS os aparelhos que usam este código. Os dados deste aparelho continuam aqui.'
+    );
+    if (!confirmed) return;
+    const confirmed2 = await showConfirm(
+      'Última confirmação',
+      'Tem certeza? Esta ação não pode ser desfeita. Digite o código para continuar (opcional: clique em Cancelar para abortar).'
+    );
+    if (!confirmed2) return;
+    const btn = $('#deleteSpaceBtn');
+    btn.disabled = true;
+    try {
+      const res = await Sync.deleteSpace();
+      renderSync();
+      if (res.ok) {
+        showToast('Espaço apagado da nuvem.', 'success');
+      } else {
+        showToast(res.error || 'Não foi possível apagar o espaço.', 'error');
+      }
+    } catch {
+      showToast('Sem conexão com a nuvem.', 'error');
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  // ==========================================
+  // REMINDERS (Lembretes de vencimento)
+  // 100% locais: agenda notificações no Service Worker (TimestampTrigger).
+  // ==========================================
+
+  function getReminderCfg() {
+    return Storage.get('reminders', { enabled: false });
+  }
+
+  async function getSwRegistration() {
+    if (!('serviceWorker' in navigator)) return null;
+    try {
+      return await navigator.serviceWorker.getRegistration() || null;
+    } catch {
+      return null;
+    }
+  }
+
+  async function scheduleReminders() {
+    if (typeof Reminders === 'undefined' || !Reminders.isSupported()) return 0;
+    const sw = await getSwRegistration();
+    if (!sw) return 0;
+    const list = Reminders.planNotifications(DB.getTransactions());
+    const ok = await Reminders.schedule(sw, list);
+    return ok ? list.length : 0;
+  }
+
+  // Re-planeja silenciosamente quando habilitado (mutação de transações)
+  function refreshReminders() {
+    const cfg = getReminderCfg();
+    if (!cfg.enabled) return;
+    scheduleReminders()
+      .then((n) => {
+        if ($('#reminderState').style.display === 'block') renderRemindersStatus(n);
+      })
+      .catch(() => {});
+  }
+
+  function renderReminders() {
+    const supported = typeof Reminders !== 'undefined' && Reminders.isSupported();
+    $('#reminderUnsupported').style.display = supported ? 'none' : 'block';
+    $('#reminderState').style.display = supported ? 'block' : 'none';
+    if (!supported) return;
+    renderRemindersStatus();
+  }
+
+  function renderRemindersStatus(justScheduled) {
+    const cfg = getReminderCfg();
+    const btn = $('#reminderToggleBtn');
+    const update = $('#reminderUpdateBtn');
+    const status = $('#reminderStatus');
+    btn.innerHTML = cfg.enabled
+      ? '<i class="fas fa-bell-slash"></i> Desativar lembretes'
+      : '<i class="fas fa-bell"></i> Ativar lembretes';
+    update.style.display = cfg.enabled ? 'inline-flex' : 'none';
+    const perm = Reminders.permissionState();
+    if (!cfg.enabled) {
+      status.textContent = perm === 'denied'
+        ? 'Notificações bloqueadas no navegador. Libere nas configurações do site para ativar os lembretes.'
+        : 'Clique em "Ativar lembretes" para receber avisos das contas a pagar nos próximos 14 dias.';
+    } else if (justScheduled !== undefined) {
+      status.textContent = justScheduled > 0
+        ? `Lembretes ativos para ${justScheduled} conta${justScheduled !== 1 ? 's' : ''} nos próximos 14 dias.`
+        : 'Lembretes ativos. Nenhuma conta a pagar nos próximos 14 dias.';
+    } else {
+      status.textContent = 'Lembretes ativos. Atualizados automaticamente quando você lança ou paga contas.';
+    }
+  }
+
+  async function handleReminderToggle() {
+    const cfg = getReminderCfg();
+    if (cfg.enabled) {
+      const sw = await getSwRegistration();
+      if (sw) await Reminders.cancel(sw);
+      Storage.set('reminders', { enabled: false });
+      renderReminders();
+      showToast('Lembretes desativados.', 'success');
+      return;
+    }
+    if (!Reminders.canRequest()) return;
+    let perm = Reminders.permissionState();
+    if (perm !== 'granted') {
+      perm = await Reminders.requestPermission();
+    }
+    if (perm !== 'granted') {
+      renderReminders();
+      showToast('Permissão de notificação negada. Libere nas configurações do site.', 'error');
+      return;
+    }
+    Storage.set('reminders', { enabled: true });
+    const n = await scheduleReminders();
+    renderRemindersStatus(n);
+    showToast(n > 0 ? `Lembretes ativos para ${n} contas!` : 'Lembretes ativos!', 'success');
+  }
+
+  async function handleReminderUpdate() {
+    const n = await scheduleReminders();
+    renderRemindersStatus(n);
+    showToast(n > 0 ? `${n} contas agendadas!` : 'Nenhuma conta a pagar nos próximos 14 dias.', 'success');
   }
 
   // ==========================================
@@ -2270,6 +2408,9 @@ const App = (() => {
     $('#syncNowBtn').addEventListener('click', handleSyncNow);
     $('#copyCodeBtn').addEventListener('click', handleCopyCode);
     $('#deactivateSpaceBtn').addEventListener('click', handleDeactivateSpace);
+    $('#deleteSpaceBtn').addEventListener('click', handleDeleteSpace);
+    $('#reminderToggleBtn').addEventListener('click', handleReminderToggle);
+    $('#reminderUpdateBtn').addEventListener('click', handleReminderUpdate);
     $('#enterCodeInput').addEventListener('keydown', (e) => {
       if (e.key === 'Enter') handleEnterCode();
     });
@@ -2279,6 +2420,7 @@ const App = (() => {
         navigateTo(currentPage);
         checkBudgetAlerts();
         renderSync();
+        refreshReminders(); // dados remotos mudaram as pendências
       });
     }
 
@@ -2306,6 +2448,9 @@ const App = (() => {
     if (typeof Sync !== 'undefined' && Sync.isConfigured && Sync.isConfigured() && Sync.isActive && Sync.isActive()) {
       Sync.syncNow().catch(() => {});
     }
+
+    // Lembretes: re-planeja ao abrir (cobre contas pagas em outro aparelho/PC)
+    refreshReminders();
 
     // Welcome toast
     setTimeout(() => {

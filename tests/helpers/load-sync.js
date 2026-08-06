@@ -48,6 +48,11 @@ function createFetchMock(serverStore) {
       if (!rec) return { ok: true, status: 200, json: async () => ({ ok: true, exists: false }) };
       return { ok: true, status: 200, json: async () => ({ ok: true, exists: true, ...rec }) };
     }
+    if (url.endsWith('/rest/v1/rpc/space_delete')) {
+      const existed = Object.prototype.hasOwnProperty.call(serverStore, body.p_space_id);
+      delete serverStore[body.p_space_id];
+      return { ok: true, status: 200, json: async () => ({ ok: true, deleted: existed }) };
+    }
     throw new Error(`fetch não mapeado: ${url}`);
   };
 }

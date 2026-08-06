@@ -121,8 +121,10 @@ test('getState: reflete código ativo e configuração', () => {
   const { Sync } = app;
   let s = Sync.getState();
   assert.strictEqual(s.active, false);
-  assert.strictEqual(s.configured, false);
+  // A anon key está EMBUTIDA no build (P6 ativo) → o app nasce configurado
+  assert.strictEqual(s.configured, true);
 
+  // configure() permite trocar URL/key em runtime (ex.: teste ou outro projeto)
   Sync.configure('https://x.example', 'anon');
   Sync.activateCode('k7q9-m2x4-art8');
   s = Sync.getState();
@@ -266,4 +268,38 @@ test('pull com payload corrompido retorna erro e não quebra', async () => {
   const res = await app.Sync.pull();
   assert.strictEqual(res.ok, false);
   assert.match(res.error, /incorreto|corrompidos/i);
+});
+
+test('deleteSpace: apaga o snapshot da nuvem e desativa o espaço', async () => {
+  const app = createApp();
+  setup(app);
+  const cat = app.DB.getCategories().find(c => c.type === 'expense');
+  app.DB.addTransaction({ type: 'expense', description: 'X', amount: 5, category: cat.id, date: '2026-08-06' });
+  await app.Sync.createSpace();
+  assert.strictEqual(Object.keys(app.serverStore).length, 1); // existe na nuvem
+
+  const res = await app.Sync.deleteSpace();
+  assert.strictEqual(res.ok, true);
+  assert.strictEqual(res.deleted, true);
+  assert.strictEqual(Object.keys(app.serverStore).length, 0); // nuvem vazia
+  assert.strictEqual(app.Sync.isActive(), false); // espaço desativado no aparelho
+  assert.strictEqual(app.DB.getTransactions().length, 1); // dados LOCAIS permanecem
+});
+
+test('deleteSpace: de espaço inexistente retorna ok sem erro', async () => {
+  const app = createApp();
+  setup(app);
+  await app.Sync.activateCode('BBBBBBBBBBBB');
+  const res = await app.Sync.deleteSpace();
+  assert.strictEqual(res.ok, true);
+  assert.strictEqual(res.deleted, false);
+  assert.strictEqual(app.Sync.isActive(), false);
+});
+
+test('deleteSpace: sem código ativo retorna erro', async () => {
+  const app = createApp();
+  setup(app);
+  const res = await app.Sync.deleteSpace();
+  assert.strictEqual(res.ok, false);
+  assert.match(res.error, /código/i);
 });

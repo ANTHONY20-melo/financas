@@ -372,6 +372,27 @@ const Sync = (() => {
     if (debounceTimer) { clearTimeout(debounceTimer); debounceTimer = null; }
   }
 
+  // Apaga o snapshot do espaço NA NUVEM (dados locais deste aparelho ficam).
+  // Destrutivo e permanente — chamar só após confirmação explícita do usuário.
+  async function deleteSpace() {
+    if (!isConfigured()) return { ok: false, error: 'Sync não configurado.' };
+    const code = getCode();
+    if (!code) return { ok: false, error: 'Nenhum código ativo.' };
+    const clean = normalizeCode(code);
+    const spaceId = await sha256Hex(clean);
+    try {
+      const result = await apiCall('space_delete', { p_space_id: spaceId });
+      if (result && result.ok === true) {
+        // desativa o espaço neste aparelho após apagar a nuvem
+        deactivate();
+        return { ok: true, deleted: result.deleted };
+      }
+      return { ok: false, error: (result && result.error) || 'Falha ao apagar o espaço.' };
+    } catch {
+      return { ok: false, error: 'Sem conexão com a nuvem. Tente novamente.' };
+    }
+  }
+
   // Estado atual para a UI
   function getState() {
     const code = getCode();
@@ -413,6 +434,7 @@ const Sync = (() => {
     activateCode,
     createSpace,
     deactivate,
+    deleteSpace,
     // config
     get setOnApplied() { return (fn) => { onApplied = fn; }; },
   };

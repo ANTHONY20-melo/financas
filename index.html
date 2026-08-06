@@ -586,11 +586,43 @@
                   <button id="deactivateSpaceBtn" class="btn btn-outline btn-danger-outline">
                     <i class="fas fa-unlink"></i> Desativar neste aparelho
                   </button>
+                  <button id="deleteSpaceBtn" class="btn btn-outline btn-danger-outline">
+                    <i class="fas fa-trash"></i> Apagar espaço na nuvem
+                  </button>
                 </div>
                 <p class="text-muted small" style="margin-top: var(--space-sm);">
                   Desativar apenas desconecta <strong>este aparelho</strong>. Seus dados na nuvem e neste aparelho permanecem.
+                  Apagar remove o espaço <strong>na nuvem</strong> (não apaga deste aparelho) — só para recomeçar do zero.
                 </p>
               </div>
+            </div>
+          </div>
+
+          <!-- Lembretes de vencimento -->
+          <div class="card" style="margin-top: var(--space-md);">
+            <div class="card-header">
+              <h3><i class="fas fa-bell"></i> Lembretes de Vencimento</h3>
+            </div>
+            <div class="card-body">
+              <p class="text-muted" style="margin-bottom: var(--space-md);">
+                Lembretes <strong>100% locais</strong> para as contas <strong>a pagar</strong> — sem servidor.
+                O app agenda notificações no próprio aparelho para os próximos 14 dias e re-planeja sozinho
+                quando você paga uma conta ou lança um novo gasto.
+              </p>
+              <div id="reminderState" style="display:none;">
+                <p id="reminderStatus" class="text-muted small" style="margin: 0 0 var(--space-sm);"></p>
+                <div class="form-actions" style="justify-content: flex-start; flex-wrap: wrap;">
+                  <button id="reminderToggleBtn" class="btn btn-outline"></button>
+                  <button id="reminderUpdateBtn" class="btn btn-outline" style="display:none;">
+                    <i class="fas fa-sync-alt"></i> Atualizar lembretes
+                  </button>
+                </div>
+              </div>
+              <p id="reminderUnsupported" class="text-muted small" style="display:none; margin: 0;">
+                <i class="fas fa-info-circle"></i> Este navegador não suporta notificações agendadas
+                (é o caso do iPhone/Safari). Neste aparelho, os lembretes aparecem ao abrir o app —
+                os avisos de contas a pagar já ficam no Dashboard.
+              </p>
             </div>
           </div>
         </section>
@@ -879,6 +911,7 @@
   <script src="vendor/chart.umd.min.js"></script>
   <script src="js/storage.js"></script>
   <script src="js/sync.js"></script>
+  <script src="js/notifications.js"></script>
   <script src="js/app.js"></script>
   <script>
     // PWA: registra o Service Worker (cache offline + instalável)
