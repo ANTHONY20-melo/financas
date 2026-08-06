@@ -66,6 +66,10 @@ const Reminders = (() => {
     return typeof Notification !== 'undefined' && 'requestPermission' in Notification;
   }
 
+  function canRequest() {
+    return hasBasicSupport();
+  }
+
   function permissionState() {
     return canRequest() ? Notification.permission : 'unsupported';
   }
