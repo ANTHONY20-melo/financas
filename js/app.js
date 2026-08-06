@@ -2194,11 +2194,15 @@ const App = (() => {
   }
 
   async function scheduleReminders() {
-    if (typeof Reminders === 'undefined' || !Reminders.isSupported()) return 0;
+    if (typeof Reminders === 'undefined' || !Reminders.hasBasicSupport()) return 0;
     const sw = await getSwRegistration();
     if (!sw) return 0;
     const list = Reminders.planNotifications(DB.getTransactions());
-    const ok = await Reminders.schedule(sw, list);
+    // Só agenda se tiver showTrigger (notification scheduling futura)
+    let ok = true;
+    if (Reminders.isSupported()) {
+      ok = await Reminders.schedule(sw, list);
+    }
     return ok ? list.length : 0;
   }
 
