@@ -2215,9 +2215,12 @@ const App = (() => {
 
   function renderReminders() {
     const supported = typeof Reminders !== 'undefined' && Reminders.isSupported();
-    $('#reminderUnsupported').style.display = supported ? 'none' : 'block';
-    $('#reminderState').style.display = supported ? 'block' : 'none';
-    if (!supported) return;
+    const basicSupported = typeof Reminders !== 'undefined' && Reminders.hasBasicSupport();
+    // Mostra o card de lembretes se tiver suporte básico (mesmo sem showTrigger)
+    const showUI = basicSupported;
+    $('#reminderUnsupported').style.display = supported ? 'none' : (basicSupported ? 'block' : 'block');
+    $('#reminderState').style.display = showUI ? 'block' : 'none';
+    if (!showUI) return;
     renderRemindersStatus();
   }
 
@@ -2226,6 +2229,8 @@ const App = (() => {
     const btn = $('#reminderToggleBtn');
     const update = $('#reminderUpdateBtn');
     const status = $('#reminderStatus');
+    const unsupported = $('#reminderUnsupported');
+    const supported = typeof Reminders !== 'undefined' && Reminders.isSupported();
     btn.innerHTML = cfg.enabled
       ? '<i class="fas fa-bell-slash"></i> Desativar lembretes'
       : '<i class="fas fa-bell"></i> Ativar lembretes';
@@ -2240,8 +2245,12 @@ const App = (() => {
         ? `Lembretes ativos para ${justScheduled} conta${justScheduled !== 1 ? 's' : ''} nos próximos 14 dias.`
         : 'Lembretes ativos. Nenhuma conta a pagar nos próximos 14 dias.';
     } else {
-      status.textContent = 'Lembretes ativos. Atualizados automaticamente quando você lança ou paga contas.';
+      status.textContent = supported
+        ? 'Lembretes ativos. Atualizados automaticamente quando você lança ou paga contas.'
+        : 'Lembretes ativos (modo básico: avisos aparecem ao abrir o app). Atualize ao lançar/pagar contas.';
     }
+    // Mensagem de fallback quando não tem showTrigger
+    unsupported.style.display = supported ? 'none' : 'block';
   }
 
   async function handleReminderToggle() {

@@ -1972,6 +1972,7 @@ table {
     flex: 1;
     min-width: 120px;
     justify-content: center;
+    white-space: normal;
   }
 
   .modal-content {
@@ -2280,6 +2281,7 @@ table {
   .form-actions .btn {
     width: 100%;
     min-width: auto;
+    white-space: normal;
   }
 
   .modal-content {
@@ -2306,11 +2308,13 @@ table {
   .btn {
     padding: 10px 14px;
     font-size: 0.8rem;
+    white-space: normal;
   }
 
   .btn-sm {
     padding: 6px 10px;
     font-size: 0.75rem;
+    white-space: normal;
   }
 
   .empty-state {

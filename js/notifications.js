@@ -61,7 +61,8 @@ const Reminders = (() => {
     return typeof Notification !== 'undefined' && 'showTrigger' in Notification.prototype;
   }
 
-  function canRequest() {
+  // Verifica se notificações básicas funcionam (mesmo sem agendamento futuro)
+  function hasBasicSupport() {
     return typeof Notification !== 'undefined' && 'requestPermission' in Notification;
   }
 
@@ -107,7 +108,8 @@ const Reminders = (() => {
     planNotifications,
     todayStr,
     isSupported,
-    canRequest,
+    hasBasicSupport,
+    canRequest: hasBasicSupport,
     permissionState,
     requestPermission,
     schedule,
