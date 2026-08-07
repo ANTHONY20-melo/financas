@@ -3,6 +3,6 @@
   "target": {
     "namespace": "android_app",
     "package_name": "br.com.anthonymelo.financas",
-    "sha256_cert_fingerprints": ["3a8a82ea0c3b1ae1c750eb0b81c85fac091c4046857bc09728233e83789040cc"]
+    "sha256_cert_fingerprints": ["E8ABD6915F807DA8E2CDFA836B2CDC10104E4B424E7181016F91805DF253B24C"]
   }
 }]
