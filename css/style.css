@@ -2424,3 +2424,318 @@ table {
 #page-nuvem .card-alert {
   grid-column: auto;
 }
+
+/* ============================================
+   JARVIS — Conselheiro Financeiro
+   ============================================ */
+.advisor-intro {
+  color: var(--text-muted, #6b7280);
+  font-size: 0.9rem;
+  margin: 0 0 var(--space-sm, 12px);
+}
+
+.advisor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs, 8px);
+  margin-bottom: var(--space-sm, 12px);
+}
+
+.advisor-actions .btn {
+  white-space: normal;
+  text-align: left;
+  justify-content: flex-start;
+}
+
+.advisor-report-card {
+  border: 1px solid var(--color-border, #e5e7eb);
+  border-radius: var(--radius-md, 10px);
+  padding: var(--space-md, 16px);
+  background: var(--color-surface, #fff);
+}
+
+.advisor-report-card h4 {
+  margin: 0 0 var(--space-sm, 12px);
+  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs, 8px);
+  color: var(--color-text, #111827);
+}
+
+.advisor-report-card h4 i {
+  color: var(--color-primary, #2563eb);
+}
+
+.advisor-health-head {
+  display: flex;
+  gap: var(--space-md, 16px);
+  flex-wrap: wrap;
+  align-items: center;
+  margin-bottom: var(--space-sm, 12px);
+}
+
+.advisor-score {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 110px;
+  height: 110px;
+  border-radius: 50%;
+  border: 6px solid var(--color-primary, #2563eb);
+  flex-shrink: 0;
+}
+
+.advisor-score--great { border-color: var(--color-income, #16a34a); }
+.advisor-score--good { border-color: var(--color-primary, #2563eb); }
+.advisor-score--warn { border-color: var(--color-warning, #f59e0b); }
+.advisor-score--bad { border-color: var(--color-expense, #dc2626); }
+
+.advisor-score-num {
+  font-size: 2rem;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--color-text, #111827);
+}
+
+.advisor-score-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-muted, #6b7280);
+  margin-top: 4px;
+}
+
+.advisor-health-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: var(--space-xs, 8px) var(--space-md, 16px);
+  flex: 1;
+  min-width: 220px;
+}
+
+.advisor-health-summary > div {
+  display: flex;
+  flex-direction: column;
+}
+
+.advisor-health-summary span {
+  font-size: 0.75rem;
+  color: var(--text-muted, #6b7280);
+}
+
+.advisor-health-summary strong {
+  font-size: 1rem;
+  color: var(--color-text, #111827);
+}
+
+.advisor-diagnosis {
+  background: var(--color-surface-alt, #f8fafc);
+  border-radius: var(--radius-sm, 8px);
+  padding: var(--space-sm, 12px);
+  font-size: 0.9rem;
+  line-height: 1.55;
+  color: var(--color-text, #111827);
+  margin: 0 0 var(--space-sm, 12px);
+}
+
+.advisor-sub {
+  margin: var(--space-sm, 12px) 0 var(--space-xs, 8px);
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--text-muted, #6b7280);
+}
+
+.advisor-top-cats,
+.advisor-advice,
+.advisor-cuts {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs, 8px);
+}
+
+.advisor-top-cats li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm, 12px);
+  font-size: 0.85rem;
+}
+
+.advisor-top-name {
+  width: 130px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.advisor-top-bar {
+  flex: 1;
+  height: 8px;
+  background: var(--color-border, #e5e7eb);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.advisor-top-bar span {
+  display: block;
+  height: 100%;
+  background: var(--color-primary, #2563eb);
+  border-radius: 4px;
+}
+
+.advisor-top-value {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.advisor-summary {
+  font-size: 0.9rem;
+  color: var(--color-text, #111827);
+  margin: 0 0 var(--space-sm, 12px);
+}
+
+.advisor-cut {
+  border: 1px solid var(--color-border, #e5e7eb);
+  border-radius: var(--radius-sm, 8px);
+  padding: var(--space-sm, 12px);
+}
+
+.advisor-cut--high {
+  border-color: var(--color-warning, #f59e0b);
+  background: var(--color-warning-bg, #fef3c7);
+}
+
+.advisor-cut-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-sm, 12px);
+}
+
+.advisor-cut-name {
+  font-weight: 700;
+}
+
+.advisor-cut-impact {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--color-warning, #f59e0b);
+  background: var(--color-warning-bg, #fef3c7);
+  border-radius: 4px;
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+
+.advisor-cut--high .advisor-cut-impact {
+  color: var(--color-expense, #dc2626);
+  background: var(--color-expense-bg, #fee2e2);
+}
+
+.advisor-cut-reason {
+  margin: 6px 0 0;
+  font-size: 0.82rem;
+  color: var(--text-muted, #6b7280);
+  line-height: 1.45;
+}
+
+.advisor-cut-nums {
+  display: flex;
+  gap: var(--space-md, 16px);
+  flex-wrap: wrap;
+  margin-top: 6px;
+  font-size: 0.85rem;
+}
+
+.advisor-cut-nums strong {
+  color: var(--color-text, #111827);
+}
+
+.advisor-sal-badge {
+  display: inline-flex;
+  align-items: center;
+  font-weight: 700;
+  font-size: 0.85rem;
+  border-radius: var(--radius-sm, 8px);
+  padding: 6px 12px;
+  margin-bottom: var(--space-sm, 12px);
+}
+
+.advisor-sal-badge.is-ok {
+  color: var(--color-income, #16a34a);
+  background: var(--color-income-bg, #dcfce7);
+}
+
+.advisor-sal-badge.is-red {
+  color: var(--color-expense, #dc2626);
+  background: var(--color-expense-bg, #fee2e2);
+}
+
+.advisor-allocs {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm, 12px);
+  margin-bottom: var(--space-sm, 12px);
+}
+
+.advisor-alloc-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.85rem;
+  margin-bottom: 4px;
+}
+
+.advisor-alloc-label strong {
+  color: var(--color-text, #111827);
+}
+
+.advisor-alloc-bar {
+  height: 10px;
+  border-radius: 5px;
+  background: var(--color-border, #e5e7eb);
+  overflow: hidden;
+}
+
+.advisor-alloc-bar span {
+  display: block;
+  height: 100%;
+  border-radius: 5px;
+}
+
+.advisor-alloc-bar.is-essential span { background: var(--color-primary, #2563eb); }
+.advisor-alloc-bar.is-want span { background: var(--color-warning, #f59e0b); }
+.advisor-alloc-bar.is-save span { background: var(--color-income, #16a34a); }
+
+.advisor-alloc-reco {
+  font-size: 0.72rem;
+  color: var(--text-muted, #6b7280);
+  margin-top: 3px;
+}
+
+.advisor-advice li {
+  position: relative;
+  padding-left: 20px;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  color: var(--color-text, #111827);
+}
+
+.advisor-advice li::before {
+  content: '→';
+  position: absolute;
+  left: 0;
+  color: var(--color-primary, #2563eb);
+  font-weight: 700;
+}
+
+.advisor-cuts li {
+  font-size: 0.88rem;
+  padding: var(--space-xs, 8px) var(--space-sm, 12px);
+  background: var(--color-surface-alt, #f8fafc);
+  border-radius: var(--radius-sm, 8px);
+}

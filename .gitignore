@@ -2,6 +2,7 @@
 
 # Android TWA signing key and build artifacts
 android.keystore
+android.keystore.old
 *.apk
 *.aab
 *.idsig

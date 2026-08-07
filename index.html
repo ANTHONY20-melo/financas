@@ -412,6 +412,28 @@
           </div>
 
           <div class="assistant-grid">
+            <!-- JARVIS Advisor -->
+            <div class="card card-chart card-chart--full">
+              <div class="card-header">
+                <h3><i class="fas fa-robot"></i> JARVIS — Conselheiro Financeiro</h3>
+              </div>
+              <div class="card-body">
+                <p class="advisor-intro">
+                  Análise 100% local e privada. Peça uma direção e o JARVIS analisa suas
+                  contas para responder em segundos.
+                </p>
+                <div class="advisor-actions">
+                  <button class="btn btn-sm" id="advisorAnalyzeBtn"><i class="fas fa-stethoscope"></i> Como está minha saúde?</button>
+                  <button class="btn btn-sm" id="advisorCutsBtn"><i class="fas fa-scissors"></i> Gastos para cortar</button>
+                  <button class="btn btn-sm" id="advisorSalaryBtn"><i class="fas fa-chart-pie"></i> Fazer o salário render</button>
+                  <button class="btn btn-sm" id="advisorDebtBtn"><i class="fas fa-life-ring"></i> Sair do vermelho</button>
+                </div>
+                <div id="advisorReport" class="advisor-report">
+                  <p class="empty-state">Clique em uma ação acima para eu analisar suas finanças.</p>
+                </div>
+              </div>
+            </div>
+
             <!-- Projection Chart -->
             <div class="card card-chart card-chart--full">
               <div class="card-header">
@@ -912,6 +934,7 @@
   <script src="js/storage.js"></script>
   <script src="js/sync.js"></script>
   <script src="js/notifications.js"></script>
+  <script src="js/advisor.js"></script>
   <script src="js/app.js"></script>
   <script>
     // PWA: registra o Service Worker (cache offline + instalável)

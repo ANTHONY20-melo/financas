@@ -1402,6 +1402,148 @@ const App = (() => {
     projectedEl.className = 'card-stat-value ' + (projected >= 0 ? 'text-income' : 'text-expense');
   }
 
+  // ═══ JARVIS — Conselheiro Financeiro ═════════════════════════════
+  // Roda o motor puro Advisor (js/advisor.js) com os dados reais do DB
+  // e renderiza o relatório pedido pelo usuário. 100% local e privado.
+
+  function renderAdvisorReport(type) {
+    const container = $('#advisorReport');
+    if (!container) return;
+    const transactions = DB.getTransactions();
+    const categories = DB.getCategories();
+    const months = 3;
+
+    if (type === 'analyze') {
+      renderAdvisorHealth(container, transactions, categories, months);
+    } else if (type === 'cuts') {
+      renderAdvisorCuts(container, transactions, categories, months);
+    } else if (type === 'salary') {
+      renderAdvisorSalary(container, transactions, categories, months);
+    } else if (type === 'debt') {
+      renderAdvisorDebt(container, transactions, categories, months);
+    }
+  }
+
+  function advisorScoreClass(score) {
+    return score >= 80 ? 'advisor-score--great' : score >= 60 ? 'advisor-score--good' : score >= 40 ? 'advisor-score--warn' : 'advisor-score--bad';
+  }
+
+  function advisorCard(type) {
+    // Rótulos consistentes para cada relatório
+    const labels = {
+      analyze: { title: 'Saúde Financeira', icon: 'fa-stethoscope' },
+      cuts: { title: 'Gastos para Cortar', icon: 'fa-scissors' },
+      salary: { title: 'Plano do Salário', icon: 'fa-chart-pie' },
+      debt: { title: 'Plano para Sair do Vermelho', icon: 'fa-life-ring' },
+    };
+    const l = labels[type] || labels.analyze;
+    return `<div class="advisor-report-card">
+      <h4><i class="fas ${l.icon}"></i> ${l.title}</h4>`;
+  }
+
+  function renderAdvisorHealth(container, transactions, categories, months) {
+    const r = Advisor.analyze(transactions, categories, { months });
+    const score = r.health.score;
+    const html = advisorCard('analyze') + `
+      <div class="advisor-health-head">
+        <div class="advisor-score ${advisorScoreClass(score)}">
+          <span class="advisor-score-num">${score}</span>
+          <span class="advisor-score-label">${esc(r.health.label)}</span>
+        </div>
+        <div class="advisor-health-summary">
+          <div><span>Renda média</span><strong>${formatCurrency(r.avgIncome)}</strong></div>
+          <div><span>Gastos médios</span><strong>${formatCurrency(r.avgExpenses)}</strong></div>
+          <div><span>Saldo médio</span><strong class="${r.avgBalance >= 0 ? 'text-income' : 'text-expense'}">${formatCurrency(r.avgBalance)}</strong></div>
+          ${r.unpaidTotal > 0 ? `<div><span>Contas a pagar</span><strong class="text-expense">${formatCurrency(r.unpaidTotal)}</strong></div>` : ''}
+        </div>
+      </div>
+      <p class="advisor-diagnosis">${esc(r.diagnosis)}</p>
+      ${r.topExpenseCategories.length ? `<h5 class="advisor-sub">Maiores gastos do último mês</h5>
+      <ul class="advisor-top-cats">
+        ${r.topExpenseCategories.map((c) => `
+          <li>
+            <span class="advisor-top-name">${esc(c.name)}</span>
+            <span class="advisor-top-bar"><span style="width:${Math.round((c.total / r.topExpenseCategories[0].total) * 100)}%"></span></span>
+            <span class="advisor-top-value">${formatCurrency(c.total)}</span>
+          </li>`).join('')}
+      </ul>` : ''}
+    </div>`;
+    container.innerHTML = html;
+  }
+
+  function renderAdvisorCuts(container, transactions, categories, months) {
+    const r = Advisor.suggestCuts(transactions, categories, { months });
+    const html = advisorCard('cuts') + `
+      <p class="advisor-summary">${esc(r.summary)}</p>
+      ${r.cuts.length ? `<ul class="advisor-cuts">
+        ${r.cuts.map((c) => `
+          <li class="advisor-cut ${c.impact === 'alta' ? 'advisor-cut--high' : ''}">
+            <div class="advisor-cut-head">
+              <span class="advisor-cut-name">${esc(c.category)}</span>
+              <span class="advisor-cut-impact">impacto ${esc(c.impact)}</span>
+            </div>
+            <p class="advisor-cut-reason">${esc(c.reason)}</p>
+            <div class="advisor-cut-nums">
+              <span>Gasto: <strong>${formatCurrency(c.total)}</strong> (${c.pctOfExpenses}% das despesas)</span>
+              <span>Economia estimada: <strong class="text-income">${formatCurrency(c.estimatedSaving)}/mês</strong></span>
+            </div>
+          </li>`).join('')}
+      </ul>` : ''}
+    </div>`;
+    container.innerHTML = html;
+  }
+
+  function renderAdvisorSalary(container, transactions, categories, months) {
+    const r = Advisor.salaryPlan(transactions, categories, { months });
+    if (!r.hasData) {
+      container.innerHTML = `<div class="advisor-report-card"><p class="empty-state">${esc(r.advice[0])}</p></div>`;
+      return;
+    }
+    const allocRow = (label, currentPct, recommendedPct, cls) => `
+      <div class="advisor-alloc">
+        <div class="advisor-alloc-label"><span>${label}</span><strong>${currentPct}%</strong></div>
+        <div class="advisor-alloc-bar ${cls}"><span style="width:${Math.min(100, currentPct)}%"></span></div>
+        <div class="advisor-alloc-reco">recomendado: até ${recommendedPct}%</div>
+      </div>`;
+    const html = advisorCard('salary') + `
+      <div class="advisor-sal-badge ${r.inRed ? 'is-red' : 'is-ok'}">
+        ${r.inRed ? 'Você fechou este mês no vermelho' : 'Você fechou este mês no azul'}
+      </div>
+      <div class="advisor-allocs">
+        ${allocRow('Essenciais', r.current.essentialPct, r.recommended.essential, 'is-essential')}
+        ${allocRow('Supérfluos', r.current.discretionaryPct, r.recommended.discretionary, 'is-want')}
+        ${allocRow('Poupança/Invest.', r.current.savingsPct, r.recommended.savings, 'is-save')}
+      </div>
+      <h5 class="advisor-sub">Direções do JARVIS</h5>
+      <ul class="advisor-advice">
+        ${r.advice.map((a) => `<li>${esc(a)}</li>`).join('')}
+      </ul>
+    </div>`;
+    container.innerHTML = html;
+  }
+
+  function renderAdvisorDebt(container, transactions, categories, months) {
+    const r = Advisor.debtEscapePlan(transactions, categories, { months });
+    if (!r.hasData) {
+      container.innerHTML = `<div class="advisor-report-card"><p class="empty-state">${esc(r.advice[0])}</p></div>`;
+      return;
+    }
+    const html = advisorCard('debt') + `
+      <div class="advisor-sal-badge ${r.inRed ? 'is-red' : 'is-ok'}">
+        ${r.inRed ? `Déficit de ${formatCurrency(r.deficit)} por mês` : 'Sem déficit neste mês'}
+      </div>
+      ${r.cuts.length ? `<p class="advisor-summary">Cortes sugeridos somam ${formatCurrency(r.potentialSaving)}/mês:</p>
+      <ul class="advisor-cuts">
+        ${r.cuts.map((c) => `<li>${esc(c.category)} — economia ~${formatCurrency(c.estimatedSaving)}/mês</li>`).join('')}
+      </ul>` : ''}
+      <h5 class="advisor-sub">Passos para sair do vermelho</h5>
+      <ul class="advisor-advice">
+        ${r.advice.map((a) => `<li>${esc(a)}</li>`).join('')}
+      </ul>
+    </div>`;
+    container.innerHTML = html;
+  }
+
   function renderProjectionChart() {
     const canvas = $('#projectionChart');
     if (!canvas) return;
@@ -2372,6 +2514,12 @@ const App = (() => {
     $('#addGoalLink').addEventListener('click', (e) => { e.preventDefault(); openGoalModal(); });
     $('#goalForm').addEventListener('submit', saveGoal);
     $('#contributionForm').addEventListener('submit', saveContribution);
+
+    // --- JARVIS Advisor ---
+    $('#advisorAnalyzeBtn').addEventListener('click', () => renderAdvisorReport('analyze'));
+    $('#advisorCutsBtn').addEventListener('click', () => renderAdvisorReport('cuts'));
+    $('#advisorSalaryBtn').addEventListener('click', () => renderAdvisorReport('salary'));
+    $('#advisorDebtBtn').addEventListener('click', () => renderAdvisorReport('debt'));
 
     // --- Modal Close ---
     $$('.modal-close').forEach(btn => {
