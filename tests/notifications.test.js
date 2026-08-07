@@ -57,12 +57,31 @@ test('planNotifications: título e corpo corretos (hoje, amanhã, N dias)', () =
   assert.match(list[0].body, /Aluguel/);
 });
 
-test('planNotifications: tag única por transação+data e timestamp do vencimento', () => {
+test('planNotifications: tag única por transação+data e timestamp às 9h do vencimento', () => {
   const list = Reminders.planNotifications([txn({ id: 'x', date: '2026-08-06' })], { from: '2026-08-06' });
   assert.strictEqual(list[0].tag, 'financas-reminder-x-2026-08-06');
-  // timestamp local de 2026-08-06 00:00 — verificamos apenas que é um número válido
-  assert.strictEqual(typeof list[0].timestamp, 'number');
-  assert.ok(list[0].timestamp > 0);
+  // Dispara às 9h LOCAL do dia do vencimento (horário útil), não à meia-noite
+  // — meia-noite já passou quando o usuário abre o app de manhã e o Chrome
+  // descarta triggers no passado (bug corrigido).
+  const d = new Date(list[0].timestamp);
+  assert.strictEqual(d.getFullYear(), 2026);
+  assert.strictEqual(d.getMonth(), 7); // agosto
+  assert.strictEqual(d.getDate(), 6);
+  assert.strictEqual(d.getHours(), 9);
+  assert.strictEqual(d.getMinutes(), 0);
+});
+
+test('planNotifications: contas de hoje e futuras têm timestamp às 9h do vencimento', () => {
+  const list = Reminders.planNotifications([
+    txn({ id: 'hoje', date: '2026-08-06' }),
+    txn({ id: 'amanha', date: '2026-08-07' }),
+    txn({ id: 'depois', date: '2026-08-20' }),
+  ], { from: '2026-08-06', daysAhead: 14 });
+  // Determinístico: 9h local do dia do vencimento (não meia-noite, que já
+  // passa quando o usuário abre o app de manhã → Chrome descartaria).
+  assert.strictEqual(list[0].timestamp, new Date('2026-08-06T09:00:00').getTime());
+  assert.strictEqual(list[1].timestamp, new Date('2026-08-07T09:00:00').getTime());
+  assert.strictEqual(list[2].timestamp, new Date('2026-08-20T09:00:00').getTime());
 });
 
 test('planNotifications: lista vazia quando não há pendências', () => {

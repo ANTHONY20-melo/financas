@@ -4,7 +4,7 @@
    ============================================ */
 'use strict';
 
-const CACHE = 'financas-cache-v4';
+const CACHE = 'financas-cache-v5';
 
 const PRECACHE = [
   './',
@@ -146,13 +146,17 @@ function scheduleReminder(r) {
   // Sem suporte (Safari/iPhone) → fallback in-app, nada aqui.
   if (!('showTrigger' in Notification.prototype)) return;
   if (!r || !r.tag || !r.timestamp) return;
+  // Timestamp no passado (ex.: conta vence hoje e o app abriu depois das 9h)
+  // é DESCARTADO pelo Chrome (nunca dispara). Fallback: dispara em segundos,
+  // o usuário acabou de abrir/ativar e vê o aviso imediatamente.
+  const when = r.timestamp <= Date.now() ? Date.now() + 5000 : r.timestamp;
   return self.registration.showNotification(r.title, {
     body: r.body,
     tag: r.tag,
     icon: './icons/icon-192.png',
     badge: './icons/icon-192.png',
     data: { date: r.date, id: r.id },
-    showTrigger: new TimestampTrigger(r.timestamp),
+    showTrigger: new TimestampTrigger(when),
   });
 }
 

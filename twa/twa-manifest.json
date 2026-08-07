@@ -12,7 +12,7 @@
   "navigationDividerColor": "#00000000",
   "navigationDividerColorDark": "#000000",
   "backgroundColor": "#f1f5f9",
-  "enableNotifications": false,
+  "enableNotifications": true,
   "startUrl": "/index.html",
   "iconUrl": "https://financas-nu-ten.vercel.app/icons/icon-512.png",
   "maskableIconUrl": "https://financas-nu-ten.vercel.app/icons/icon-maskable-512.png",

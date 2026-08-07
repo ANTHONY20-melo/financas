@@ -44,12 +44,17 @@ const Reminders = (() => {
       .map((t) => {
         const due = new Date(t.date + 'T00:00:00');
         const days = Math.round((due - base) / 86400000);
+        // Dispara às 9h do dia do vencimento (horário útil), não à meia-noite.
+        // Se o horário já passou (ex.: conta vence hoje e o app abriu depois
+        // das 9h), o SW ajusta para "agora + segundos" — ver service-worker.js.
+        const fire = new Date(due);
+        fire.setHours(9, 0, 0, 0);
         return {
           id: t.id,
           date: t.date,
           title: days === 0 ? 'Conta vence hoje' : days === 1 ? 'Conta vence amanhã' : 'Conta vence em ' + days + ' dias',
           body: formatCurrency(t.amount) + ' — ' + t.description,
-          timestamp: due.getTime(),
+          timestamp: fire.getTime(),
           tag: TAG_PREFIX + t.id + '-' + t.date,
         };
       });
