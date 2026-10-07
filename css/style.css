@@ -1,5 +1,5 @@
 /* ============================================
-   FINANÇAS PESSOAIS - Sexta Feira
+   FINANÃAS PESSOAIS - Sexta Feira
    Design System & Styles
    ============================================ */
 
@@ -630,7 +630,7 @@ table {
   white-space: nowrap;
 }
 
-/* Badge de status na tabela de transações */
+/* Badge de status na tabela de transaÃ§Ãµes */
 .badge-paid {
   background: var(--color-income-bg);
   color: var(--color-income-dark);
@@ -646,7 +646,7 @@ table {
   color: var(--color-expense);
 }
 
-/* Checkbox "Já foi pago?" no modal */
+/* Checkbox "JÃ¡ foi pago?" no modal */
 .form-checkbox {
   display: flex;
   align-items: center;
@@ -931,7 +931,7 @@ table {
   color: var(--color-expense-dark);
 }
 
-/* Badge de parcela (P4): mostra "1/12" ao lado da descrição */
+/* Badge de parcela (P4): mostra "1/12" ao lado da descriÃ§Ã£o */
 .badge-installment {
   margin-left: 6px;
   padding: 1px 8px;
@@ -2426,7 +2426,7 @@ table {
 }
 
 /* ============================================
-   JARVIS — Conselheiro Financeiro
+   JARVIS â Conselheiro Financeiro
    ============================================ */
 .advisor-intro {
   color: var(--text-muted, #6b7280);
@@ -2726,7 +2726,7 @@ table {
 }
 
 .advisor-advice li::before {
-  content: '→';
+  content: 'â';
   position: absolute;
   left: 0;
   color: var(--color-primary, #2563eb);
@@ -2741,7 +2741,7 @@ table {
 }
 
 /* ============================================
-   ASSISTENTE IA � chat (js/ai.js)
+   ASSISTENTE IA  chat (js/ai.js)
    ============================================ */
 .ai-card .card-header {
   flex-wrap: wrap;
@@ -2917,7 +2917,3 @@ table {
 @media (max-width: 640px) { .ai-card .card-header { flex-direction: column; align-items: flex-start; } .ai-header-top { gap: var(--space-xs, 4px); } .ai-provider-badge { max-width: 140px; } .ai-chat-messages { max-height: 260px; } .ai-chat-input { gap: var(--space-xs, 4px); } .ai-suggestions { gap: var(--space-xs, 4px); } .ai-chip { font-size: 0.72rem; padding: 4px 10px; } }
 @media (max-width: 420px) { .ai-provider-badge { max-width: 110px; font-size: 0.68rem; } .ai-chat-messages { max-height: 220px; } .ai-msg { max-width: 95%; } }
 
-.ai-tip { background: var(--color-primary-bg, #eff6ff); border: 1px solid var(--color-primary-light, #3b82f6); border-radius: var(--radius-md, 10px); padding: var(--space-md, 16px); font-size: 0.85rem; line-height: 1.5; color: var(--color-text-secondary, #475569); }
-.ai-tip strong { color: var(--color-primary, #2563eb); }
-.ai-tip-list { margin: var(--space-sm, 8px) 0 0 0; padding-left: var(--space-lg, 20px); display: flex; flex-direction: column; gap: var(--space-xs, 4px); }
-.ai-tip-list li { margin: 0; }

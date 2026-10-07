@@ -56,7 +56,7 @@ const AI = (() => {
       baseUrl: 'https://openrouter.ai/api/v1',
       model: 'meta-llama/llama-3.3-70b-instruct:free',
       requiresKey: true,
-      hint: 'Chave em openrouter.ai/keys. Para celular, prefira esse caminho. Ou exponha Ollama via túnel e use "URL base".',
+      hint: 'Chave em openrouter.ai/keys',
     },
     openai: {
       label: 'OpenAI',
