@@ -38,7 +38,7 @@ const AI = (() => {
       label: 'Groq (grátis, precisa cadastro)',
       kind: 'openai',
       baseUrl: 'https://api.groq.com/openai/v1',
-      model: 'llama-3.3-70b-versatile',
+      model: 'openai/gpt-oss-20b',
       requiresKey: true,
       hint: 'Chave gratuita em console.groq.com/keys',
     },
