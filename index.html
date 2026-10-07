@@ -412,6 +412,39 @@
           </div>
 
           <div class="assistant-grid">
+            <!-- Assistente IA (LLM) -->
+            <div class="card card-chart card-chart--full ai-card">
+              <div class="card-header">
+                <h3><i class="fas fa-comments"></i> Assistente IA</h3>
+                <div class="ai-header-actions">
+                  <span id="aiProviderBadge" class="ai-provider-badge">Ollama (local)</span>
+                  <button id="aiSettingsBtn" class="btn-icon" title="Configurar assistente" aria-label="Configurar assistente">
+                    <i class="fas fa-gear"></i>
+                  </button>
+                </div>
+              </div>
+              <div class="card-body">
+                <p class="ai-intro text-muted small">
+                  Converse com uma IA que <strong>consulta suas contas de verdade</strong> por ferramentas
+                  (function calling). Suas transações não saem do aparelho — só um resumo vai ao provedor.
+                </p>
+                <div id="aiChatMessages" class="ai-chat-messages"></div>
+                <div id="aiSuggestions" class="ai-suggestions">
+                  <button type="button" class="ai-chip" data-ai-prompt="Pra onde foi meu dinheiro este mês?">Pra onde foi meu dinheiro?</button>
+                  <button type="button" class="ai-chip" data-ai-prompt="Posso gastar R$ 500 agora?">Posso gastar R$500?</button>
+                  <button type="button" class="ai-chip" data-ai-prompt="Como está minha saúde financeira?">Saúde financeira</button>
+                  <button type="button" class="ai-chip" data-ai-prompt="Me dê 3 dicas para economizar este mês">Como economizar</button>
+                </div>
+                <form id="aiChatForm" class="ai-chat-input" autocomplete="off">
+                  <input type="text" id="aiChatInput" class="form-input" placeholder="Pergunte ou peça: &quot;registra 50 de uber ontem&quot;...">
+                  <button type="submit" id="aiChatSend" class="btn btn-primary" aria-label="Enviar">
+                    <i class="fas fa-paper-plane"></i>
+                  </button>
+                </form>
+                <p id="aiChatStatus" class="ai-status text-muted small"></p>
+              </div>
+            </div>
+
             <!-- JARVIS Advisor -->
             <div class="card card-chart card-chart--full">
               <div class="card-header">
@@ -910,6 +943,46 @@
     </div>
   </div>
 
+  <div id="aiSettingsModal" class="modal">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content modal-content--sm">
+      <div class="modal-header">
+        <h2><i class="fas fa-gear"></i> Configurar Assistente IA</h2>
+        <button class="modal-close" aria-label="Fechar">&times;</button>
+      </div>
+      <form id="aiSettingsForm" class="modal-body" novalidate>
+        <div class="form-group">
+          <label for="aiProvider" class="form-label">Provedor</label>
+          <select id="aiProvider" class="form-select"></select>
+          <small class="form-hint" id="aiProviderHint"></small>
+        </div>
+        <div class="form-group">
+          <label for="aiModel" class="form-label">Modelo</label>
+          <input type="text" id="aiModel" class="form-input" placeholder="Deixe vazio para usar o padrão do provedor">
+        </div>
+        <div class="form-group" id="aiKeyGroup">
+          <label for="aiApiKey" class="form-label">Chave da API (API Key)</label>
+          <div class="ai-key-row">
+            <input type="password" id="aiApiKey" class="form-input" placeholder="Cole sua chave aqui" autocomplete="off">
+            <button type="button" id="aiKeyToggle" class="btn btn-outline" aria-label="Mostrar/ocultar chave">
+              <i class="fas fa-eye"></i>
+            </button>
+          </div>
+          <small class="form-hint">A chave fica guardada <strong>só neste aparelho</strong> (localStorage). Nunca vai para a nuvem.</small>
+        </div>
+        <div class="form-group">
+          <label for="aiBaseUrl" class="form-label">URL base (avançado, opcional)</label>
+          <input type="text" id="aiBaseUrl" class="form-input" placeholder="Ex: http://localhost:11434/v1" autocomplete="off">
+          <small class="form-hint">Para endpoints compatíveis com a API da OpenAI que não estão na lista.</small>
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn btn-outline modal-cancel">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Salvar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <div id="confirmModal" class="modal">
     <div class="modal-backdrop"></div>
     <div class="modal-content modal-content--sm">
@@ -935,6 +1008,7 @@
   <script src="js/sync.js"></script>
   <script src="js/notifications.js"></script>
   <script src="js/advisor.js"></script>
+  <script src="js/ai.js"></script>
   <script src="js/app.js"></script>
   <script>
     // PWA: registra o Service Worker (cache offline + instalável)

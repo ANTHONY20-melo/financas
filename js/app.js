@@ -1339,6 +1339,7 @@ const App = (() => {
     const monthStr = $('#assistantMonthSelect').value || getCurrentMonthStr();
     const [year, month] = monthStr.split('-').map(Number);
 
+    renderAIChat();
     renderAssistantAlerts(monthStr);
     renderAssistantStats();
     renderProjectionChart();
@@ -2521,6 +2522,32 @@ const App = (() => {
     $('#advisorSalaryBtn').addEventListener('click', () => renderAdvisorReport('salary'));
     $('#advisorDebtBtn').addEventListener('click', () => renderAdvisorReport('debt'));
 
+    // --- AI Chat ---
+    $('#aiChatForm').addEventListener('submit', (e) => {
+      e.preventDefault();
+      handleAIChatSubmit();
+    });
+    $('#aiSuggestions').addEventListener('click', (e) => {
+      const chip = e.target.closest('.ai-chip');
+      if (chip) {
+        const input = $('#aiChatInput');
+        input.value = chip.dataset.aiPrompt || '';
+        input.focus();
+      }
+    });
+    $('#aiSettingsBtn').addEventListener('click', () => openAISettings());
+    $('#aiKeyToggle').addEventListener('click', toggleAIKey);
+    $('#aiSettingsForm').addEventListener('submit', (e) => {
+      e.preventDefault();
+      saveAISettings();
+    });
+    if ($('#aiProvider')) {
+      $('#aiProvider').addEventListener('change', () => {
+        updateAIProviderHint();
+        updateAIKeyVisibility();
+      });
+    }
+
     // --- Modal Close ---
     $$('.modal-close').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -2656,3 +2683,157 @@ const App = (() => {
 document.addEventListener('DOMContentLoaded', () => {
   App.init();
 });
+  // ==========================================
+  // ASSISTENTE IA (LLM) — UI
+  // ==========================================
+
+  const AI_CONFIG_KEY = 'financas_ai_config';
+
+  function getAIConfig(defaults) {
+    if (typeof defaults === 'undefined') defaults = {};
+    try {
+      var raw = localStorage.getItem(AI_CONFIG_KEY);
+      if (!raw) return defaults;
+      var parsed = JSON.parse(raw);
+      return Object.assign({}, defaults, parsed);
+    } catch (e) {
+      return defaults;
+    }
+  }
+
+  function setAIConfig(cfg) {
+    try { localStorage.setItem(AI_CONFIG_KEY, JSON.stringify(cfg)); } catch (e) {}
+  }
+
+  function aiToHtml(text) {
+    if (!text) return '';
+    return esc(text).replace(/\n/g, '<br>');
+  }
+
+  function updateAIProviderBadge() {
+    var badge = document.getElementById('aiProviderBadge');
+    if (!badge) return;
+    var cfg = getAIConfig({provider:'ollama', model:''});
+    var label = 'Ollama (local)';
+    if (window.AI && typeof AI.getProvider === 'function') {
+      var p = AI.getProvider(cfg.provider);
+      if (p) {
+        if (cfg.model && cfg.model !== p.model) label = cfg.provider + ': ' + cfg.model;
+        else label = p.label;
+        badge.title = p.hint || '';
+      }
+    }
+    badge.textContent = label;
+  }
+
+  function renderAIChat() {
+    var box = document.getElementById('aiChatMessages');
+    if (!box) return;
+    var cfg = getAIConfig({messages:[]});
+    var msgs = Array.isArray(cfg.messages) ? cfg.messages : [];
+    if (msgs.length === 0) {
+      box.innerHTML = '<p class=\"ai-empty\">Converse com o assistente IA. Pergunte o que quiser sobre suas finanças.</p>';
+    } else {
+      var html = '';
+      for (var i = 0; i < msgs.length; i++) {
+        var m = msgs[i];
+        var ts = m.ts ? new Date(m.ts).toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}) : '';
+        var cls = m.role === 'user' ? 'ai-msg--user' : m.error ? 'ai-msg--error' : 'ai-msg--assistant';
+        html += '<div class=\"ai-msg ' + cls + '\"><div>' + aiToHtml(m.content) + '</div>' + (ts ? '<span class=\"ai-msg-time\">' + ts + '</span>' : '') + '</div>';
+      }
+      box.innerHTML = html;
+    }
+    box.scrollTop = box.scrollHeight;
+    updateAIProviderBadge();
+  }
+
+  function pushAIMessage(role, content, error) {
+    var cfg = getAIConfig({messages:[]});
+    if (!Array.isArray(cfg.messages)) cfg.messages = [];
+    cfg.messages.push({role: role, content: content, ts: Date.now(), error: !!error});
+    if (cfg.messages.length > 60) cfg.messages = cfg.messages.slice(-60);
+    setAIConfig(cfg);
+  }
+
+  function updateAIProviderHint() {
+    var hint = document.getElementById('aiProviderHint');
+    if (!hint) return;
+    var sel = document.getElementById('aiProvider');
+    var id = sel ? sel.value : 'ollama';
+    var txt = '';
+    if (window.AI && typeof AI.getProvider === 'function') {
+      var p = AI.getProvider(id); if (p) txt = p.hint || '';
+    }
+    hint.textContent = txt;
+  }
+
+  function updateAIKeyVisibility() {
+    var group = document.getElementById('aiKeyGroup');
+    var sel = document.getElementById('aiProvider');
+    var id = sel ? sel.value : 'ollama';
+    var show = false;
+    if (window.AI && typeof AI.getProvider === 'function') {
+      var p = AI.getProvider(id); show = !!(p && p.requiresKey);
+    }
+    if (group) group.style.display = show ? 'block' : 'none';
+  }
+
+  function toggleAIKey() {
+    var input = document.getElementById('aiApiKey');
+    if (!input) return;
+    input.type = input.type === 'password' ? 'text' : 'password';
+    var icon = document.querySelector('#aiKeyToggle i');
+    if (icon) icon.className = input.type === 'text' ? 'fas fa-eye-slash' : 'fas fa-eye';
+  }
+
+  function openAISettings() {
+    var cfg = getAIConfig({provider:'ollama', model:'', apiKey:'', baseUrl:''});
+    var sel = document.getElementById('aiProvider');
+    if (sel && window.AI && typeof AI.listProviders === 'function') {
+      var list = AI.listProviders(); var html='';
+      for (var i=0;i<list.length;i++) { var pr=list[i]; html += '<option value=\"' + esc(pr.id) + '\">' + esc(pr.label) + '</option>'; }
+      sel.innerHTML = html;
+    }
+    if (sel) sel.value = cfg.provider || 'ollama';
+    if (document.getElementById('aiModel')) document.getElementById('aiModel').value = cfg.model || '';
+    if (document.getElementById('aiApiKey')) document.getElementById('aiApiKey').value = cfg.apiKey || '';
+    if (document.getElementById('aiBaseUrl')) document.getElementById('aiBaseUrl').value = cfg.baseUrl || '';
+    updateAIProviderHint(); updateAIKeyVisibility();
+    if (typeof openModal === 'function') openModal('aiSettingsModal');
+  }
+
+  function saveAISettings() {
+    var cfg = getAIConfig({});
+    if (document.getElementById('aiProvider')) cfg.provider = document.getElementById('aiProvider').value;
+    if (document.getElementById('aiModel')) cfg.model = document.getElementById('aiModel').value.trim();
+    if (document.getElementById('aiApiKey')) cfg.apiKey = document.getElementById('aiApiKey').value;
+    if (document.getElementById('aiBaseUrl')) cfg.baseUrl = document.getElementById('aiBaseUrl').value.trim();
+    setAIConfig(cfg); updateAIProviderBadge();
+    if (typeof closeModal === 'function') closeModal('aiSettingsModal');
+    if (typeof showToast === 'function') showToast('Configurações do assistente IA salvas!', 'success');
+    renderAIChat();
+  }
+
+  async function handleAIChatSubmit() {
+    var input = document.getElementById('aiChatInput');
+    var btn = document.getElementById('aiChatSend');
+    var status = document.getElementById('aiChatStatus');
+    if (!input || !btn) return;
+    var text = input.value.trim(); if (!text) return;
+    input.value=''; btn.disabled=true; if (status) status.textContent='Pensando...';
+    pushAIMessage('user', text); renderAIChat();
+    try {
+      var cfg = getAIConfig({provider:'ollama',model:'',apiKey:'',baseUrl:''});
+      var req = { provider:cfg.provider, model:cfg.model||undefined, apiKey:cfg.apiKey||undefined, baseUrl:cfg.baseUrl||undefined, db:window.DB, fetch:window.fetch, messages:[{role:'user',content:text}] };
+      var r = await AI.chat(req);
+      var reply = (r&&r.text)?r.text:'Pronto.';
+      pushAIMessage('assistant', reply); renderAIChat();
+      if (window.Sync && typeof Sync.markDirty === 'function') Sync.markDirty();
+    } catch (e) {
+      var msg = e&&e.message?e.message:'Erro ao chamar a IA.';
+      pushAIMessage('assistant','Erro: '+msg,true); renderAIChat();
+      if (typeof showToast==='function') showToast('Não foi possível conversar com a IA.','error');
+    } finally {
+      btn.disabled=false; if (status) status.textContent=''; input.focus();
+    }
+  }

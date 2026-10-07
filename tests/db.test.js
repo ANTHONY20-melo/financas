@@ -126,17 +126,26 @@ test('getMonthlySummary retorna zero para mês sem dados', () => {
 });
 
 test('getMonthlyHistory retorna N meses consecutivos', () => {
-  const history = DB.getMonthlyHistory(6);
-  assert.equal(history.length, 6);
+  // Datas RELATIVAS ao mês atual: o DB usa `new Date()` internamente, então
+  // montar meses fixos tornava o teste dependente do calendário (flaky).
+  const MONTHS = 6;
+  const history = DB.getMonthlyHistory(MONTHS);
+  assert.equal(history.length, MONTHS);
   history.forEach(h => {
     assert.ok(h.month, 'deve ter mês');
     assert.ok(h.label, 'deve ter label');
     assert.equal(typeof h.income, 'number');
     assert.equal(typeof h.expense, 'number');
   });
-  // Meses consecutivos, do mais antigo para o atual: 2026-03 ... 2026-08
-  assert.equal(history[0].month, '2026-03');
-  assert.equal(history[history.length - 1].month, '2026-08');
+
+  const now = new Date();
+  const expectedMonth = (offset) => {
+    const d = new Date(now.getFullYear(), now.getMonth() - offset, 1);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  };
+  // Mais antigo → atual
+  assert.equal(history[0].month, expectedMonth(MONTHS - 1));
+  assert.equal(history[history.length - 1].month, expectedMonth(0));
 });
 
 test('getCategoryExpenses agrupa por categoria, ordena desc e soma totais', () => {
