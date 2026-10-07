@@ -203,7 +203,7 @@
             <div class="toolbar-left">
               <div class="search-box">
                 <i class="fas fa-search"></i>
-                <input type="text" id="transactionSearch" class="form-input" placeholder="Buscar transações...">
+                <input type="text" id="transactionSearch" class="form-input" placeholder="Buscar transações..." autocomplete="off">
               </div>
               <select id="transactionTypeFilter" class="form-select">
                 <option value="all">Todos os tipos</option>
@@ -221,6 +221,14 @@
                 <option value="unpaid">A Pagar</option>
                 <option value="paid">Pagas</option>
               </select>
+              <div class="date-range" role="group" aria-label="Período personalizado">
+                <input type="date" id="transactionDateFrom" class="form-input" title="Data inicial" aria-label="Data inicial">
+                <span class="date-range__sep" aria-hidden="true">–</span>
+                <input type="date" id="transactionDateTo" class="form-input" title="Data final" aria-label="Data final">
+              </div>
+              <button id="clearFiltersBtn" class="btn btn-ghost btn-sm" title="Limpar todos os filtros" hidden>
+                <i class="fas fa-filter-circle-xmark"></i> Limpar
+              </button>
             </div>
             <div class="toolbar-right">
               <button id="exportTransactionsBtn" class="btn btn-outline" title="Exportar CSV">
@@ -228,24 +236,38 @@
               </button>
             </div>
           </div>
+          <!-- Ações em massa: aparece só quando há seleção -->
+          <div id="bulkBar" class="bulk-bar" hidden>
+            <span id="bulkCount" class="bulk-bar__count">0 selecionadas</span>
+            <button id="bulkPaidBtn" class="btn btn-sm btn-outline" title="Marcar todas as selecionadas como pagas">
+              <i class="fas fa-check-double"></i> Marcar como paga(s)
+            </button>
+            <button id="bulkDeleteBtn" class="btn btn-sm btn-danger" title="Excluir as selecionadas">
+              <i class="fas fa-trash-alt"></i> Excluir
+            </button>
+            <button id="bulkClearBtn" class="btn btn-sm btn-ghost" title="Limpar seleção">Limpar seleção</button>
+          </div>
           <div class="card">
             <div class="card-body">
               <div class="table-responsive">
                 <table class="table" id="transactionsTable">
                   <thead>
                     <tr>
-                      <th>Data</th>
-                      <th>Descrição</th>
-                      <th>Categoria</th>
-                      <th>Tipo</th>
-                      <th>Status</th>
-                      <th>Valor</th>
+                      <th class="col-select">
+                        <input type="checkbox" id="selectAllTx" aria-label="Selecionar todas as transações da página">
+                      </th>
+                      <th class="sortable" data-sort="date" aria-sort="descending"><button type="button" class="th-sort">Data <i class="fa-solid fa-sort"></i></button></th>
+                      <th class="sortable" data-sort="description"><button type="button" class="th-sort">Descrição <i class="fa-solid fa-sort"></i></button></th>
+                      <th class="sortable" data-sort="category"><button type="button" class="th-sort">Categoria <i class="fa-solid fa-sort"></i></button></th>
+                      <th class="sortable" data-sort="type"><button type="button" class="th-sort">Tipo <i class="fa-solid fa-sort"></i></button></th>
+                      <th class="sortable" data-sort="status"><button type="button" class="th-sort">Status <i class="fa-solid fa-sort"></i></button></th>
+                      <th class="sortable" data-sort="amount"><button type="button" class="th-sort">Valor <i class="fa-solid fa-sort"></i></button></th>
                       <th>Ações</th>
                     </tr>
                   </thead>
                   <tbody id="transactionsBody">
                     <tr>
-                      <td colspan="7" class="text-center">Nenhuma transação encontrada.</td>
+                      <td colspan="8" class="text-center">Nenhuma transação encontrada.</td>
                     </tr>
                   </tbody>
                 </table>

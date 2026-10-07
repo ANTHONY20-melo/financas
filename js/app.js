@@ -12,6 +12,10 @@ const App = (() => {
   // só quando os FILTROS mudam; renders de CRUD preservam a página atual).
   let transactionsPage = 1;
   const TX_PAGE_SIZE = 50;
+  // Ordenação por coluna (th clicável). Default histórico: data decrescente.
+  let txSort = { key: 'date', dir: 'desc' };
+  // Seleção em massa: ids escolhidos pelo checkbox (limpa quando saem do filtro)
+  let selectedTxIds = new Set();
 
   // --- DOM Cache ---
   const $ = (sel) => document.querySelector(sel);
@@ -90,7 +94,7 @@ const App = (() => {
   }
 
   // --- Toast ---
-  function showToast(message, type = 'success', duration = 3000) {
+  function showToast(message, type = 'success', duration = 3000, action = null) {
     const container = $('#toastContainer');
     const icons = {
       success: 'fa-solid fa-check-circle',
@@ -101,13 +105,37 @@ const App = (() => {
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
     // Zero-trust: mensagens podem conter dados do usuário (nomes de categoria etc.) → escapa
-    toast.innerHTML = `<i class="${icons[type] || icons.success}"></i> ${esc(message)}`;
+    toast.innerHTML = `<i class="${icons[type] || icons.success}"></i> <span class="toast-msg">${esc(message)}</span>`;
+    // Ação opcional no toast (ex.: "Desfazer" após excluir). Um clique executa
+    // e fecha o toast — o botão é desabilitado antes do callback para evitar
+    // duplo clique restaurando duas vezes.
+    if (action && typeof action.onClick === 'function') {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'toast-action';
+      btn.textContent = action.label || 'Desfazer';
+      btn.addEventListener('click', () => {
+        btn.disabled = true;
+        try {
+          action.onClick();
+        } finally {
+          toast.classList.add('removing');
+          setTimeout(() => toast.remove(), 300);
+        }
+      });
+      toast.appendChild(btn);
+    }
     container.appendChild(toast);
 
     setTimeout(() => {
       toast.classList.add('removing');
       setTimeout(() => toast.remove(), 300);
     }, duration);
+  }
+
+  // Toast padrão de desfazer: 6s para reagir, mensagem neutra de aviso
+  function showToastUndo(message, onUndo) {
+    showToast(message, 'warning', 6000, { label: 'Desfazer', onClick: onUndo });
   }
 
   // --- Modal System ---
@@ -507,17 +535,146 @@ const App = (() => {
   // ==========================================
   // TRANSACTIONS
   // ==========================================
+  function readTxFilters() {
+    return {
+      search: $('#transactionSearch').value,
+      type: $('#transactionTypeFilter').value,
+      category: $('#transactionCategoryFilter').value,
+      month: $('#transactionMonthFilter').value,
+      status: $('#transactionStatusFilter').value,
+      dateFrom: $('#transactionDateFrom').value,
+      dateTo: $('#transactionDateTo').value,
+    };
+  }
+
+  function isAnyTxFilterActive(f) {
+    return !!(f.search || f.type !== 'all' || f.category !== 'all' || f.month !== 'all' ||
+      f.status !== 'all' || f.dateFrom || f.dateTo);
+  }
+
+  // Highlight do termo buscado: escapa PRIMEIRO (zero-XSS) e só então envolve
+  // as ocorrências em <mark>. Limite de 2 chars evita marcar quase tudo.
+  function highlightTx(text, term) {
+    const safe = esc(text);
+    const t = String(term || '').trim();
+    if (t.length < 2) return safe;
+    try {
+      const re = new RegExp(`(${t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'ig');
+      return safe.replace(re, '<mark class="tx-mark">$1</mark>');
+    } catch {
+      return safe;
+    }
+  }
+
+  function renderTxEmpty(hasFilters) {
+    if (hasFilters) {
+      return `
+        <tr><td colspan="8" class="tx-empty">
+          <i class="fa-solid fa-magnifying-glass"></i>
+          <p>Nenhuma transação encontrada com esses filtros.</p>
+          <div class="tx-empty__actions">
+            <button class="btn btn-outline btn-sm" onclick="App.clearTxFilters()">
+              <i class="fa-solid fa-filter-circle-xmark"></i> Limpar filtros
+            </button>
+            <button class="btn btn-primary btn-sm" onclick="App.newTransaction()">
+              <i class="fa-solid fa-plus"></i> Nova transação
+            </button>
+          </div>
+        </td></tr>`;
+    }
+    return `
+      <tr><td colspan="8" class="tx-empty">
+        <i class="fa-solid fa-receipt"></i>
+        <p>Nenhuma transação registrada ainda.</p>
+        <div class="tx-empty__actions">
+          <button class="btn btn-primary btn-sm" onclick="App.newTransaction()">
+            <i class="fa-solid fa-plus"></i> Adicionar primeira transação
+          </button>
+        </div>
+      </td></tr>`;
+  }
+
+  function renderTxRow(t, term) {
+    const cat = DB.getCategory(t.category);
+    const catName = cat ? cat.name : 'Sem categoria';
+    const instBadge = t.installment
+      ? `<span class="badge badge-installment" title="Parcela ${t.installment.number} de ${t.installment.total}">${t.installment.number}/${t.installment.total}</span>`
+      : '';
+    const groupBtn = t.installment
+      ? `<button class="btn-delete" onclick="App.deleteInstallmentGroup('${t.installment.groupId}')" title="Excluir todas as parcelas (${t.installment.total}x)">
+          <i class="fa-solid fa-layer-group"></i>
+        </button>`
+      : '';
+    // Status de pagamento (receita é sempre recebida)
+    const isIncome = t.type === 'income';
+    const paid = isIncome ? true : DB.isPaid(t);
+    const overdue = !paid && t.date < getTodayStr();
+    const statusBadge = isIncome
+      ? '<span class="badge badge-paid">Recebida</span>'
+      : paid
+        ? '<span class="badge badge-paid">Paga</span>'
+        : overdue
+          ? '<span class="badge badge-unpaid badge-unpaid--overdue">Atrasada</span>'
+          : '<span class="badge badge-unpaid">A pagar</span>';
+    const paidBtn = isIncome ? '' : `
+      <button class="btn-toggle-paid" onclick="App.togglePaid('${t.id}')" title="${paid ? 'Marcar como não paga' : 'Marcar como paga'}">
+        <i class="fas fa-${paid ? 'check-circle' : 'circle'}"></i>
+      </button>`;
+    const selected = selectedTxIds.has(t.id);
+    return `
+      <tr class="${selected ? 'row-selected' : ''}">
+        <td class="col-select" data-label="Selecionar">
+          <input type="checkbox" class="tx-select" data-id="${t.id}" ${selected ? 'checked' : ''}
+            aria-label="Selecionar ${esc(t.description)}">
+        </td>
+        <td data-label="Data">${formatDate(t.date)}</td>
+        <td data-label="Descrição">
+          <strong>${highlightTx(t.description, term)}</strong>${instBadge}
+          ${t.notes ? `<br><small class="text-muted">${highlightTx(t.notes, term)}</small>` : ''}
+        </td>
+        <td data-label="Categoria">
+          <span class="badge ${t.type === 'income' ? 'badge-income' : 'badge-expense'}">
+            ${highlightTx(catName, term)}
+          </span>
+        </td>
+        <td data-label="Tipo">${t.type === 'income' ? 'Receita' : 'Despesa'}</td>
+        <td data-label="Status">${statusBadge}</td>
+        <td data-label="Valor" class="${t.type === 'income' ? 'text-income' : 'text-expense'} fw-600">
+          ${t.type === 'income' ? '+' : '-'} ${formatCurrency(t.amount)}
+        </td>
+        <td data-label="Ações">
+          <div class="actions">
+            ${paidBtn}
+            <button class="btn-edit" onclick="App.editTransaction('${t.id}')" title="Editar">
+              <i class="fas fa-edit"></i>
+            </button>
+            <button class="btn-delete" onclick="App.deleteTransaction('${t.id}')" title="Excluir">
+              <i class="fas fa-trash-alt"></i>
+            </button>
+            ${groupBtn}
+          </div>
+        </td>
+      </tr>
+    `;
+  }
+
   function renderTransactions(options = {}) {
     if (options.resetPage) transactionsPage = 1;
 
-    const search = $('#transactionSearch').value;
-    const type = $('#transactionTypeFilter').value;
-    const category = $('#transactionCategoryFilter').value;
-    const month = $('#transactionMonthFilter').value;
-    const status = $('#transactionStatusFilter').value;
-
-    const transactions = DB.getTransactionsByFilters({ search, type, category, month, paid: status });
+    const f = readTxFilters();
+    const transactions = DB.getTransactionsByFilters({
+      search: f.search, type: f.type, category: f.category, month: f.month,
+      paid: f.status, dateFrom: f.dateFrom, dateTo: f.dateTo,
+      sortBy: txSort.key, sortDir: txSort.dir,
+    });
     const tbody = $('#transactionsBody');
+
+    // Seleção: descarta ids que saíram do resultado atual — excluir "o que não
+    // estou vendo" é como apagar às cegas. Só ids ainda visíveis permanecem.
+    const visibleIds = new Set(transactions.map(t => t.id));
+    for (const id of [...selectedTxIds]) {
+      if (!visibleIds.has(id)) selectedTxIds.delete(id);
+    }
 
     // Paginação: renderiza só a página atual (evita DOM gigante com anos de histórico)
     const totalPages = Math.max(1, Math.ceil(transactions.length / TX_PAGE_SIZE));
@@ -525,67 +682,13 @@ const App = (() => {
     const pageStart = (transactionsPage - 1) * TX_PAGE_SIZE;
     const pageItems = transactions.slice(pageStart, pageStart + TX_PAGE_SIZE);
 
+    const hasFilters = isAnyTxFilterActive(f);
+    $('#clearFiltersBtn').hidden = !hasFilters;
+
     if (transactions.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="7" class="text-center">Nenhuma transação encontrada.</td></tr>';
+      tbody.innerHTML = renderTxEmpty(hasFilters);
     } else {
-      tbody.innerHTML = pageItems.map(t => {
-        const cat = DB.getCategory(t.category);
-        const catName = cat ? cat.name : 'Sem categoria';
-        const instBadge = t.installment
-          ? `<span class="badge badge-installment" title="Parcela ${t.installment.number} de ${t.installment.total}">${t.installment.number}/${t.installment.total}</span>`
-          : '';
-        const groupBtn = t.installment
-          ? `<button class="btn-delete" onclick="App.deleteInstallmentGroup('${t.installment.groupId}')" title="Excluir todas as parcelas (${t.installment.total}x)">
-              <i class="fa-solid fa-layer-group"></i>
-            </button>`
-          : '';
-        // P5: status de pagamento (receita é sempre recebida)
-        const isIncome = t.type === 'income';
-        const paid = isIncome ? true : DB.isPaid(t);
-        const overdue = !paid && t.date < getTodayStr();
-        const statusBadge = isIncome
-          ? '<span class="badge badge-paid">Recebida</span>'
-          : paid
-            ? '<span class="badge badge-paid">Paga</span>'
-            : overdue
-              ? '<span class="badge badge-unpaid badge-unpaid--overdue">Atrasada</span>'
-              : '<span class="badge badge-unpaid">A pagar</span>';
-        const paidBtn = isIncome ? '' : `
-          <button class="btn-toggle-paid" onclick="App.togglePaid('${t.id}')" title="${paid ? 'Marcar como não paga' : 'Marcar como paga'}">
-            <i class="fas fa-${paid ? 'check-circle' : 'circle'}"></i>
-          </button>`;
-        return `
-          <tr>
-            <td>${formatDate(t.date)}</td>
-            <td>
-              <strong>${esc(t.description)}</strong>${instBadge}
-              ${t.notes ? `<br><small class="text-muted">${esc(t.notes)}</small>` : ''}
-            </td>
-            <td>
-              <span class="badge ${t.type === 'income' ? 'badge-income' : 'badge-expense'}">
-                ${esc(catName)}
-              </span>
-            </td>
-            <td>${t.type === 'income' ? 'Receita' : 'Despesa'}</td>
-            <td>${statusBadge}</td>
-            <td class="${t.type === 'income' ? 'text-income' : 'text-expense'} fw-600">
-              ${t.type === 'income' ? '+' : '-'} ${formatCurrency(t.amount)}
-            </td>
-            <td>
-              <div class="actions">
-                ${paidBtn}
-                <button class="btn-edit" onclick="App.editTransaction('${t.id}')" title="Editar">
-                  <i class="fas fa-edit"></i>
-                </button>
-                <button class="btn-delete" onclick="App.deleteTransaction('${t.id}')" title="Excluir">
-                  <i class="fas fa-trash-alt"></i>
-                </button>
-                ${groupBtn}
-              </div>
-            </td>
-          </tr>
-        `;
-      }).join('');
+      tbody.innerHTML = pageItems.map(t => renderTxRow(t, f.search)).join('');
     }
 
     // Totais do conjunto FILTRADO completo (não só da página visível):
@@ -605,6 +708,9 @@ const App = (() => {
     totalEl.style.color = totalAmount >= 0 ? 'var(--color-income)' : 'var(--color-expense)';
 
     renderTransactionsPagination(transactions.length, totalPages);
+    updateBulkBar();
+    updateSortIndicators();
+    syncTxFiltersToHash();
   }
 
   function renderTransactionsPagination(totalItems, totalPages) {
@@ -624,6 +730,152 @@ const App = (() => {
     `;
   }
 
+  // --- Seleção em massa ---
+  function updateBulkBar() {
+    const bar = $('#bulkBar');
+    if (!bar) return;
+    const n = selectedTxIds.size;
+    bar.hidden = n === 0;
+    $('#bulkCount').textContent = `${n} selecionada${n === 1 ? '' : 's'}`;
+
+    // Checkbox "selecionar todos" reflete só a página visível
+    const boxes = document.querySelectorAll('#transactionsBody .tx-select');
+    const all = $('#selectAllTx');
+    const checkedCount = [...boxes].filter(b => b.checked).length;
+    all.checked = boxes.length > 0 && checkedCount === boxes.length;
+    all.indeterminate = checkedCount > 0 && checkedCount < boxes.length;
+  }
+
+  async function bulkMarkPaid() {
+    const ids = new Set(selectedTxIds);
+    const all = DB.getTransactions();
+    let ok = 0;
+    for (const t of all) {
+      if (ids.has(t.id) && t.type === 'expense' && !DB.isPaid(t)) {
+        if (DB.setTransactionPaid(t.id, true).success) ok++;
+      }
+    }
+    if (ok === 0) {
+      showToast('Nenhuma transação pendente entre as selecionadas.', 'warning');
+      return;
+    }
+    Sync.markDirty();
+    selectedTxIds.clear();
+    showToast(`${ok} transação(ões) marcada(s) como paga(s).`, 'success');
+    renderDashboard();
+    renderTransactions();
+    checkBudgetAlerts();
+    refreshReminders();
+  }
+
+  async function bulkDelete() {
+    const ids = new Set(selectedTxIds);
+    const removed = DB.getTransactions().filter(t => ids.has(t.id));
+    if (removed.length === 0) return;
+    const confirmed = await showConfirm(
+      'Excluir Transações',
+      `Tem certeza que deseja excluir ${removed.length} transação(ões)? Você poderá desfazer na sequência.`
+    );
+    if (!confirmed) return;
+    for (const t of removed) DB.deleteTransaction(t.id);
+    Sync.markDirty();
+    selectedTxIds.clear();
+    renderDashboard();
+    renderTransactions();
+    checkBudgetAlerts();
+    refreshReminders();
+    showToastUndo(`${removed.length} transação(ões) excluída(s).`, () => {
+      DB.restoreTransactions(removed);
+      Sync.markDirty();
+      renderDashboard();
+      renderTransactions();
+      checkBudgetAlerts();
+      refreshReminders();
+      showToast('Exclusão desfeita.', 'success');
+    });
+  }
+
+  // --- Ordenação por coluna ---
+  function updateSortIndicators() {
+    document.querySelectorAll('#transactionsTable th.sortable').forEach(th => {
+      const active = th.dataset.sort === txSort.key;
+      th.classList.toggle('sorted', active);
+      th.setAttribute('aria-sort', active ? (txSort.dir === 'asc' ? 'ascending' : 'descending') : 'none');
+      const icon = th.querySelector('.th-sort i');
+      if (icon) {
+        icon.className = active
+          ? `fa-solid fa-sort-${txSort.dir === 'asc' ? 'up' : 'down'}`
+          : 'fa-solid fa-sort';
+      }
+    });
+  }
+
+  // --- Filtros ---
+  function clearTxFilters() {
+    $('#transactionSearch').value = '';
+    $('#transactionTypeFilter').value = 'all';
+    $('#transactionCategoryFilter').value = 'all';
+    $('#transactionMonthFilter').value = 'all';
+    $('#transactionStatusFilter').value = 'all';
+    $('#transactionDateFrom').value = '';
+    $('#transactionDateTo').value = '';
+    txSort = { key: 'date', dir: 'desc' };
+    renderTransactions({ resetPage: true });
+  }
+
+  // --- Deep-link: filtros vivem na URL (#transacoes?m=2026-01&ty=expense...) ---
+  // replaceState NÃO dispara hashchange → sincronizar a URL nunca gera loop.
+  function syncTxFiltersToHash() {
+    if (currentPage !== 'transacoes') return;
+    const f = readTxFilters();
+    const p = new URLSearchParams();
+    if (f.search) p.set('q', f.search);
+    if (f.type !== 'all') p.set('ty', f.type);
+    if (f.category !== 'all') p.set('ca', f.category);
+    if (f.month !== 'all') p.set('m', f.month);
+    if (f.status !== 'all') p.set('st', f.status);
+    if (f.dateFrom) p.set('df', f.dateFrom);
+    if (f.dateTo) p.set('dt', f.dateTo);
+    if (txSort.key !== 'date') p.set('sb', txSort.key);
+    if (txSort.dir !== 'desc') p.set('sd', txSort.dir);
+    const query = p.toString();
+    const next = '#transacoes' + (query ? '?' + query : '');
+    if (window.location.hash !== next) history.replaceState(null, '', next);
+  }
+
+  function applyTxFiltersFromHash(params) {
+    if (!params) return;
+    const setSelect = (sel, val, allowed) => {
+      if (val === null) return;
+      if (allowed && !allowed.includes(val)) return; // URL inválida não pode quebrar o filtro
+      const el = $(sel);
+      if (![...el.options].some(o => o.value === val)) return; // option inexistente
+      el.value = val;
+    };
+    const q = params.get('q');
+    if (q !== null) $('#transactionSearch').value = q.slice(0, 200);
+    setSelect('#transactionTypeFilter', params.get('ty'), ['income', 'expense']);
+    setSelect('#transactionCategoryFilter', params.get('ca'));
+    setSelect('#transactionMonthFilter', params.get('m'));
+    setSelect('#transactionStatusFilter', params.get('st'), ['paid', 'unpaid']);
+    const df = params.get('df');
+    if (df && /^\d{4}-\d{2}-\d{2}$/.test(df)) $('#transactionDateFrom').value = df;
+    const dt = params.get('dt');
+    if (dt && /^\d{4}-\d{2}-\d{2}$/.test(dt)) $('#transactionDateTo').value = dt;
+    const sb = params.get('sb');
+    if (['date', 'description', 'category', 'type', 'status', 'amount'].includes(sb)) txSort.key = sb;
+    const sd = params.get('sd');
+    if (sd === 'asc' || sd === 'desc') txSort.dir = sd;
+  }
+
+  function parseAppHash() {
+    const raw = window.location.hash.replace(/^#/, '');
+    const i = raw.indexOf('?');
+    const page = i === -1 ? raw : raw.slice(0, i);
+    const params = i === -1 ? null : new URLSearchParams(raw.slice(i + 1));
+    return { page, params };
+  }
+
   function setupTransactionFilters() {
     // Populate category filter
     const catSelect = $('#transactionCategoryFilter');
@@ -638,18 +890,69 @@ const App = (() => {
       months.map(m => `<option value="${m.value}">${m.label}</option>`).join('');
 
     // Event listeners
+    const onFilterChange = () => renderTransactions({ resetPage: true });
+
     // Busca com debounce: re-renderizar a tabela inteira a cada tecla travava
     // o digitar em bases grandes (só renderiza 250ms depois do último caractere).
     let searchDebounce = null;
     $('#transactionSearch').addEventListener('input', () => {
       clearTimeout(searchDebounce);
-      searchDebounce = setTimeout(() => renderTransactions({ resetPage: true }), 250);
+      searchDebounce = setTimeout(onFilterChange, 250);
     });
     // Qualquer mudança de filtro volta para a primeira página
-    $('#transactionTypeFilter').addEventListener('change', () => renderTransactions({ resetPage: true }));
-    $('#transactionCategoryFilter').addEventListener('change', () => renderTransactions({ resetPage: true }));
-    $('#transactionMonthFilter').addEventListener('change', () => renderTransactions({ resetPage: true }));
-    $('#transactionStatusFilter').addEventListener('change', () => renderTransactions({ resetPage: true }));
+    $('#transactionTypeFilter').addEventListener('change', onFilterChange);
+    $('#transactionCategoryFilter').addEventListener('change', onFilterChange);
+    $('#transactionMonthFilter').addEventListener('change', onFilterChange);
+    $('#transactionStatusFilter').addEventListener('change', onFilterChange);
+    $('#transactionDateFrom').addEventListener('change', onFilterChange);
+    $('#transactionDateTo').addEventListener('change', onFilterChange);
+    $('#clearFiltersBtn').addEventListener('click', clearTxFilters);
+
+    // Ordenação por coluna (delegação: o thead não re-renderiza)
+    $('#transactionsTable').addEventListener('click', (e) => {
+      const th = e.target.closest('th.sortable');
+      if (!th) return;
+      const key = th.dataset.sort;
+      if (txSort.key === key) {
+        txSort.dir = txSort.dir === 'asc' ? 'desc' : 'asc'; // mesmo th → inverte
+      } else {
+        // Primeiro clique numa coluna nova: ordem natural (texto A→Z, valor
+        // menor→maior), exceto data que nasce decrescente (mais recente primeiro)
+        txSort = { key, dir: key === 'date' ? 'desc' : 'asc' };
+      }
+      renderTransactions({ resetPage: true });
+    });
+
+    // Seleção em massa (delegação: as linhas são re-renderizadas a cada render)
+    $('#transactionsBody').addEventListener('change', (e) => {
+      const box = e.target.closest('.tx-select');
+      if (!box) return;
+      if (box.checked) selectedTxIds.add(box.dataset.id);
+      else selectedTxIds.delete(box.dataset.id);
+      const row = box.closest('tr');
+      if (row) row.classList.toggle('row-selected', box.checked);
+      updateBulkBar();
+    });
+
+    // "Selecionar todos" = só a página visível (nunca a página inteira do filtro)
+    $('#selectAllTx').addEventListener('change', (e) => {
+      const checked = e.target.checked;
+      document.querySelectorAll('#transactionsBody .tx-select').forEach(box => {
+        box.checked = checked;
+        if (checked) selectedTxIds.add(box.dataset.id);
+        else selectedTxIds.delete(box.dataset.id);
+        const row = box.closest('tr');
+        if (row) row.classList.toggle('row-selected', checked);
+      });
+      updateBulkBar();
+    });
+
+    $('#bulkPaidBtn').addEventListener('click', bulkMarkPaid);
+    $('#bulkDeleteBtn').addEventListener('click', bulkDelete);
+    $('#bulkClearBtn').addEventListener('click', () => {
+      selectedTxIds.clear();
+      renderTransactions();
+    });
 
     // Paginação (delegação: o box é re-renderizado a cada render da tabela)
     $('#transactionsPagination').addEventListener('click', (e) => {
@@ -798,20 +1101,47 @@ const App = (() => {
   // --- Transaction Operations (exposed globally) ---
   window.App = window.App || {};
 
+  window.App.newTransaction = function () {
+    openTransactionModal();
+  };
+
+  window.App.clearTxFilters = function () {
+    clearTxFilters();
+  };
+
   window.App.editTransaction = function (id) {
     openTransactionModal(id);
   };
 
   window.App.deleteTransaction = async function (id) {
-    const confirmed = await showConfirm('Excluir Transação', 'Tem certeza que deseja excluir esta transação? Esta ação não pode ser desfeita.');
+    // Guarda a transação COMPLETA antes de excluir: é o que o "Desfazer"
+    // reinsere (id/createdAt preservados → mesmo objeto, sem duplicar)
+    const tx = DB.getTransactions().find(x => x.id === id);
+    const confirmed = await showConfirm('Excluir Transação', 'Tem certeza que deseja excluir esta transação? Você poderá desfazer na sequência.');
     if (confirmed) {
       const result = DB.deleteTransaction(id);
       if (result.success) {
         Sync.markDirty();
-        showToast('Transação excluída!', 'success');
+        selectedTxIds.delete(id);
         renderDashboard();
         renderTransactions();
         refreshReminders();
+        if (tx) {
+          showToastUndo('Transação excluída.', () => {
+            const restored = DB.restoreTransaction(tx);
+            if (!restored.success) {
+              showToast(restored.error, 'error');
+              return;
+            }
+            Sync.markDirty();
+            renderDashboard();
+            renderTransactions();
+            refreshReminders();
+            showToast('Transação restaurada.', 'success');
+          });
+        } else {
+          showToast('Transação excluída!', 'success');
+        }
       } else {
         showToast(result.error, 'error');
       }
@@ -823,17 +1153,30 @@ const App = (() => {
     const total = group.length > 0 ? group[0].installment.total : 0;
     const confirmed = await showConfirm(
       'Excluir Parcelas',
-      `Tem certeza que deseja excluir TODAS as ${total} parcelas deste grupo? Esta ação não pode ser desfeita.`
+      `Tem certeza que deseja excluir TODAS as ${total} parcelas deste grupo? Você poderá desfazer na sequência.`
     );
     if (confirmed) {
       const result = DB.deleteInstallmentGroup(groupId);
       if (result.success) {
         Sync.markDirty();
-        showToast(`${result.count} parcelas excluídas!`, 'success');
+        for (const t of group) selectedTxIds.delete(t.id);
         renderDashboard();
         renderTransactions();
         checkBudgetAlerts();
         refreshReminders();
+        showToastUndo(`${result.count} parcelas excluídas.`, () => {
+          const restored = DB.restoreTransactions(group);
+          if (!restored.success) {
+            showToast(restored.error, 'error');
+            return;
+          }
+          Sync.markDirty();
+          renderDashboard();
+          renderTransactions();
+          checkBudgetAlerts();
+          refreshReminders();
+          showToast(`${restored.count} parcela(s) restaurada(s).`, 'success');
+        });
       } else {
         showToast(result.error, 'error');
       }
@@ -2711,11 +3054,30 @@ const App = (() => {
     setupAssistantSelect();
     setupReportFilters();
 
-    // --- Navigation from URL hash ---
-    const hash = window.location.hash.replace('#', '');
+    // --- Navigation from URL hash (deep-link) ---
+    // '#transacoes?m=2026-01&ty=expense' → página + filtros restaurados da URL
+    const { page, params } = parseAppHash();
     const validPages = ['dashboard', 'transacoes', 'categorias', 'orcamentos', 'recorrentes', 'assistente', 'relatorios', 'nuvem'];
-    const page = validPages.includes(hash) ? hash : 'dashboard';
-    navigateTo(page);
+    applyTxFiltersFromHash(params); // válida cada valor: URL adulterada não quebra
+    navigateTo(validPages.includes(page) ? page : 'dashboard');
+
+    // Hash mudou por fora (voltar/avançar do navegador ou link colado):
+    // replaceState do app não dispara este evento → nunca há loop.
+    // Regra: hash '#transacoes?...' aplica os filtros da URL; hash
+    // '#transacoes' puro significa "sem filtro" → limpa (volta do back).
+    window.addEventListener('hashchange', () => {
+      const parsed = parseAppHash();
+      const valid = validPages.includes(parsed.page);
+      if (parsed.page === 'transacoes') {
+        if (parsed.params) {
+          applyTxFiltersFromHash(parsed.params);
+          renderTransactions({ resetPage: true });
+        } else {
+          clearTxFilters();
+        }
+      }
+      if (valid && parsed.page !== currentPage) navigateTo(parsed.page);
+    });
 
     // Badge inicial de alertas de orçamento
     checkBudgetAlerts();

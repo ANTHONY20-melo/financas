@@ -334,7 +334,7 @@ const DB = (() => {
     });
   }
 
-  function getTransactionsByFilters({ search, type, category, month, year, paid } = {}) {
+  function getTransactionsByFilters({ search, type, category, month, year, paid, dateFrom, dateTo, sortBy, sortDir } = {}) {
     let transactions = getTransactions();
 
     if (search) {
@@ -382,10 +382,66 @@ const DB = (() => {
       });
     }
 
-    // Sort by date descending
-    transactions.sort((a, b) => new Date(b.date + 'T00:00:00') - new Date(a.date + 'T00:00:00'));
+    // Período personalizado (de/até): 'YYYY-MM-DD' compara lexicograficamente
+    // na mesma ordem cronológica — dispensa parsing de data.
+    if (dateFrom && /^\d{4}-\d{2}-\d{2}$/.test(dateFrom)) {
+      transactions = transactions.filter(t => t.date >= dateFrom);
+    }
+    if (dateTo && /^\d{4}-\d{2}-\d{2}$/.test(dateTo)) {
+      transactions = transactions.filter(t => t.date <= dateTo);
+    }
+
+    // Ordenação por coluna (clicando no <th>). Default mantém o comportamento
+    // histórico: data decrescente. Defensivo contra dado incompleto/corrompido:
+    // um registro sem description/category nunca pode derrubar o render inteiro.
+    const cmpText = (x, y) => String(x ?? '').localeCompare(String(y ?? ''), 'pt-BR', { sensitivity: 'base' });
+    const SORTERS = {
+      date: (a, b) => new Date((a.date || '') + 'T00:00:00') - new Date((b.date || '') + 'T00:00:00'),
+      description: (a, b) => cmpText(a.description, b.description),
+      category: (a, b) => cmpText(getCategoryName(a.category), getCategoryName(b.category)),
+      type: (a, b) => (a.type === b.type ? 0 : a.type === 'income' ? -1 : 1),
+      status: (a, b) => (isPaid(a) === isPaid(b) ? 0 : isPaid(a) ? -1 : 1),
+      amount: (a, b) => (a.amount || 0) - (b.amount || 0),
+    };
+    const sortKey = SORTERS[sortBy] ? sortBy : 'date';
+    const dir = sortDir === 'asc' ? 1 : -1;
+    transactions.sort((a, b) => dir * SORTERS[sortKey](a, b));
 
     return transactions;
+  }
+
+  // Restaura uma transação excluída (undo) preservando id e createdAt.
+  // Usado pelo toast "Desfazer" — re-insere no fim da lista; a ordenação
+  // da tela é determinada pelo sort, não pela posição no array.
+  function restoreTransaction(tx) {
+    if (!tx || !tx.id) return { success: false, error: 'Transação inválida para restauração.' };
+    const transactions = getTransactions();
+    if (transactions.some(t => t.id === tx.id)) {
+      return { success: false, error: 'Transação já restaurada.' };
+    }
+    transactions.push(tx);
+    saveTransactions(transactions);
+    return { success: true, transaction: tx };
+  }
+
+  // Restaura várias transações de uma vez (undo de exclusão em massa / parcelas)
+  function restoreTransactions(list) {
+    if (!Array.isArray(list) || list.length === 0) {
+      return { success: false, error: 'Nada para restaurar.' };
+    }
+    const transactions = getTransactions();
+    const existing = new Set(transactions.map(t => t.id));
+    let restored = 0;
+    for (const tx of list) {
+      if (tx && tx.id && !existing.has(tx.id)) {
+        transactions.push(tx);
+        existing.add(tx.id);
+        restored++;
+      }
+    }
+    if (restored === 0) return { success: false, error: 'Transações já restauradas.' };
+    saveTransactions(transactions);
+    return { success: true, count: restored };
   }
 
   // --- Categories CRUD ---
@@ -1501,6 +1557,8 @@ const DB = (() => {
     addTransaction,
     updateTransaction,
     deleteTransaction,
+    restoreTransaction,
+    restoreTransactions,
     getTransactionsByFilters,
     // Payments (P5)
     isPaid,
