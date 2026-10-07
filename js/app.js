@@ -2534,10 +2534,16 @@ const App = (() => {
     $('#contributionForm').addEventListener('submit', saveContribution);
 
     // --- JARVIS Advisor ---
-    $('#advisorAnalyzeBtn').addEventListener('click', () => renderAdvisorReport('analyze'));
-    $('#advisorCutsBtn').addEventListener('click', () => renderAdvisorReport('cuts'));
-    $('#advisorSalaryBtn').addEventListener('click', () => renderAdvisorReport('salary'));
-    $('#advisorDebtBtn').addEventListener('click', () => renderAdvisorReport('debt'));
+    // Bloco removido do HTML (commit 0d9238b): usar guarda porque querySelector
+    // retorna null e derrubava o init() inteiro (chat/sync/export paravam de funcionar).
+    const bindIfPresent = (sel, evt, fn) => {
+      const el = $(sel);
+      if (el) el.addEventListener(evt, fn);
+    };
+    bindIfPresent('#advisorAnalyzeBtn', 'click', () => renderAdvisorReport('analyze'));
+    bindIfPresent('#advisorCutsBtn', 'click', () => renderAdvisorReport('cuts'));
+    bindIfPresent('#advisorSalaryBtn', 'click', () => renderAdvisorReport('salary'));
+    bindIfPresent('#advisorDebtBtn', 'click', () => renderAdvisorReport('debt'));
 
     // --- AI Chat ---
     $('#aiChatForm').addEventListener('submit', (e) => {
@@ -2677,29 +2683,7 @@ const App = (() => {
     }, 500);
   }
 
-  // Public API
-  return {
-    init,
-    editTransaction: window.App.editTransaction,
-    deleteTransaction: window.App.deleteTransaction,
-    deleteInstallmentGroup: window.App.deleteInstallmentGroup,
-    togglePaid: window.App.togglePaid,
-    editCategory: window.App.editCategory,
-    deleteCategory: window.App.deleteCategory,
-    editGoal: window.App.editGoal,
-    deleteGoal: window.App.deleteGoal,
-    contributeGoal: window.App.contributeGoal,
-    launchRecurring: window.App.launchRecurring,
-    editRecurring: window.App.editRecurring,
-    deleteRecurring: window.App.deleteRecurring,
-    toggleRecurring: window.App.toggleRecurring,
-  };
-})();
 
-// --- Initialize on DOM Ready ---
-document.addEventListener('DOMContentLoaded', () => {
-  App.init();
-});
   // ==========================================
   // ASSISTENTE IA (LLM) � UI
   // ==========================================
@@ -2840,8 +2824,14 @@ document.addEventListener('DOMContentLoaded', () => {
     input.value=''; btn.disabled=true; if (status) status.textContent='Pensando...';
     pushAIMessage('user', text); renderAIChat();
     try {
-      var cfg = getAIConfig({provider:'ollama',model:'',apiKey:'',baseUrl:''});
-      var req = { provider:cfg.provider, model:cfg.model||undefined, apiKey:cfg.apiKey||undefined, baseUrl:cfg.baseUrl||undefined, db:window.DB, fetch:window.fetch, messages:[{role:'user',content:text}] };
+      var cfg = getAIConfig({provider:'ollama',model:'',apiKey:'',baseUrl:'',messages:[]});
+      // Histórico da conversa: sem isso a IA não lembrava do que foi falado antes
+      // (cada pergunta chegava isolada ao modelo). Erros e system são excluídos.
+      var history = (Array.isArray(cfg.messages) ? cfg.messages : [])
+        .filter(function (m) { return m && !m.error && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string' && m.content.trim(); })
+        .slice(-20)
+        .map(function (m) { return { role: m.role, content: m.content }; });
+      var req = { provider:cfg.provider, model:cfg.model||undefined, apiKey:cfg.apiKey||undefined, baseUrl:cfg.baseUrl||undefined, db:window.DB, fetch:window.fetch, messages:history };
       var r = await AI.chat(req);
       var reply = (r&&r.text)?r.text:'Pronto.';
       pushAIMessage('assistant', reply); renderAIChat();
@@ -2854,3 +2844,27 @@ document.addEventListener('DOMContentLoaded', () => {
       btn.disabled=false; if (status) status.textContent=''; input.focus();
     }
   }
+
+  // Public API
+  return {
+    init,
+    editTransaction: window.App.editTransaction,
+    deleteTransaction: window.App.deleteTransaction,
+    deleteInstallmentGroup: window.App.deleteInstallmentGroup,
+    togglePaid: window.App.togglePaid,
+    editCategory: window.App.editCategory,
+    deleteCategory: window.App.deleteCategory,
+    editGoal: window.App.editGoal,
+    deleteGoal: window.App.deleteGoal,
+    contributeGoal: window.App.contributeGoal,
+    launchRecurring: window.App.launchRecurring,
+    editRecurring: window.App.editRecurring,
+    deleteRecurring: window.App.deleteRecurring,
+    toggleRecurring: window.App.toggleRecurring,
+  };
+})();
+
+// --- Initialize on DOM Ready ---
+document.addEventListener('DOMContentLoaded', () => {
+  App.init();
+});
