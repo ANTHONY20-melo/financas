@@ -65,7 +65,22 @@
 
 ---
 
-## 6. Suporte rápido (o que responder aos clientes)
+## 6. Assistente IA (chat) no celular
+
+O chat IA precisa de **uma chave gratuita** (a Groq dá crédito de graça, sem cartão). Feito **1 única vez** por aparelho:
+
+1. Crie a chave: **console.groq.com** → conta gratuita → **API Keys** → **Create API Key** → copie (começa com `gsk_...`)
+2. No app: aba **Assistente** → ⚙️ **Configurar**
+3. **Provedor: Groq (grátis)** — a URL e o Modelo **já vêm preenchidos**, não precisa tocar neles
+4. **Cole a chave** no campo Chave da API → **Testar conexão** → deve aparecer *"Conectado com sucesso"*
+5. Toque em **Salvar** — pronto, o chat funciona em qualquer lugar
+
+> 💡 Sem chave? Use **Gemini** (mesmo fluxo, chave grátis em aistudio.google.com/apikey).
+> 🔒 A chave fica só no seu aparelho — **não compartilhe** (quem tiver ela pode usar nos seus limites grátis). Se suspeitar de vazamento, crie outra no console e apague a antiga.
+
+---
+
+## 7. Suporte rápido (o que responder aos clientes)
 
 - **"Perdi meu código"** → sem o código, os dados da nuvem ficam inacessíveis (segurança de verdade). Os dados **deste aparelho** continuam. Crie um novo espaço e continue de onde parou neste aparelho.
 - **"Quero começar do zero"** → **Nuvem → Apagar espaço na nuvem** (remove da nuvem; este aparelho continua com os dados).
@@ -74,7 +89,7 @@
 
 ---
 
-## 7. Notas técnicas para você (vendedor)
+## 8. Notas técnicas para você (vendedor)
 
 - **Privacidade:** criptografia AES-256-GCM no aparelho, chave derivada do código (PBKDF2 150k). A nuvem guarda só o texto cifrado.
 - **Espaços:** cada código gera um `space_id` (SHA-256) — apagar o código não dá para recuperar os dados (isso é uma feature de segurança, não bug).
