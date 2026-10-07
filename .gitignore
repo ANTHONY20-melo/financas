@@ -1,5 +1,8 @@
 .vercel
 
+# Node (harness de testes local)
+node_modules/
+
 # Android TWA signing key and build artifacts
 android.keystore
 android.keystore.old
