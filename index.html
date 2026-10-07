@@ -251,8 +251,13 @@
                 </table>
               </div>
               <div class="table-footer">
-                <span id="transactionsCount">0 transações</span>
-                <span id="transactionsTotal" class="fw-600">Total: R$ 0,00</span>
+                <div class="table-totals">
+                  <span id="transactionsCount">0 transações</span>
+                  <span class="totals-item totals-item--income">Entradas: <b id="transactionsIncome">R$ 0,00</b></span>
+                  <span class="totals-item totals-item--expense">Saídas: <b id="transactionsExpense">R$ 0,00</b></span>
+                  <span id="transactionsTotal" class="fw-600 totals-item totals-item--balance">Saldo: R$ 0,00</span>
+                </div>
+                <div id="transactionsPagination" class="pagination" hidden></div>
               </div>
             </div>
           </div>

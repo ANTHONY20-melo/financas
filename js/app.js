@@ -8,6 +8,10 @@ const App = (() => {
   // --- State ---
   let currentPage = 'dashboard';
   let charts = {};
+  // Estado da paginação da tabela de transações (render muda a página sozinha
+  // só quando os FILTROS mudam; renders de CRUD preservam a página atual).
+  let transactionsPage = 1;
+  const TX_PAGE_SIZE = 50;
 
   // --- DOM Cache ---
   const $ = (sel) => document.querySelector(sel);
@@ -503,7 +507,9 @@ const App = (() => {
   // ==========================================
   // TRANSACTIONS
   // ==========================================
-  function renderTransactions() {
+  function renderTransactions(options = {}) {
+    if (options.resetPage) transactionsPage = 1;
+
     const search = $('#transactionSearch').value;
     const type = $('#transactionTypeFilter').value;
     const category = $('#transactionCategoryFilter').value;
@@ -513,10 +519,16 @@ const App = (() => {
     const transactions = DB.getTransactionsByFilters({ search, type, category, month, paid: status });
     const tbody = $('#transactionsBody');
 
+    // Paginação: renderiza só a página atual (evita DOM gigante com anos de histórico)
+    const totalPages = Math.max(1, Math.ceil(transactions.length / TX_PAGE_SIZE));
+    if (transactionsPage > totalPages) transactionsPage = totalPages; // clamping após exclusões
+    const pageStart = (transactionsPage - 1) * TX_PAGE_SIZE;
+    const pageItems = transactions.slice(pageStart, pageStart + TX_PAGE_SIZE);
+
     if (transactions.length === 0) {
       tbody.innerHTML = '<tr><td colspan="7" class="text-center">Nenhuma transação encontrada.</td></tr>';
     } else {
-      tbody.innerHTML = transactions.map(t => {
+      tbody.innerHTML = pageItems.map(t => {
         const cat = DB.getCategory(t.category);
         const catName = cat ? cat.name : 'Sem categoria';
         const instBadge = t.installment
@@ -576,14 +588,40 @@ const App = (() => {
       }).join('');
     }
 
-    // Update counts
-    const totalAmount = transactions.reduce((sum, t) => {
-      return sum + (t.type === 'income' ? t.amount : -t.amount);
-    }, 0);
-    $('#transactionsCount').textContent = `${transactions.length} transação${transactions.length !== 1 ? 'ões' : ''}`;
+    // Totais do conjunto FILTRADO completo (não só da página visível):
+    // entradas, saídas e saldo separados — o saldo sozinho escondia o quadro real.
+    let totalIncome = 0;
+    let totalExpense = 0;
+    for (const t of transactions) {
+      if (t.type === 'income') totalIncome += t.amount;
+      else totalExpense += t.amount;
+    }
+    const totalAmount = totalIncome - totalExpense;
+    $('#transactionsCount').textContent = `${transactions.length} transaç${transactions.length === 1 ? 'ão' : 'ões'}`;
+    $('#transactionsIncome').textContent = formatCurrency(totalIncome);
+    $('#transactionsExpense').textContent = formatCurrency(totalExpense);
     const totalEl = $('#transactionsTotal');
-    totalEl.textContent = `Total: ${formatCurrency(totalAmount)}`;
+    totalEl.textContent = `Saldo: ${formatCurrency(totalAmount)}`;
     totalEl.style.color = totalAmount >= 0 ? 'var(--color-income)' : 'var(--color-expense)';
+
+    renderTransactionsPagination(transactions.length, totalPages);
+  }
+
+  function renderTransactionsPagination(totalItems, totalPages) {
+    const box = $('#transactionsPagination');
+    if (!box) return;
+    if (totalPages <= 1) {
+      box.hidden = true;
+      box.innerHTML = '';
+      return;
+    }
+    const page = transactionsPage;
+    box.hidden = false;
+    box.innerHTML = `
+      <button class="page-btn" data-page="${page - 1}" ${page <= 1 ? 'disabled' : ''} aria-label="Página anterior">&laquo;</button>
+      <span class="page-info">Página ${page} de ${totalPages}</span>
+      <button class="page-btn" data-page="${page + 1}" ${page >= totalPages ? 'disabled' : ''} aria-label="Próxima página">&raquo;</button>
+    `;
   }
 
   function setupTransactionFilters() {
@@ -600,11 +638,29 @@ const App = (() => {
       months.map(m => `<option value="${m.value}">${m.label}</option>`).join('');
 
     // Event listeners
-    $('#transactionSearch').addEventListener('input', renderTransactions);
-    $('#transactionTypeFilter').addEventListener('change', renderTransactions);
-    $('#transactionCategoryFilter').addEventListener('change', renderTransactions);
-    $('#transactionMonthFilter').addEventListener('change', renderTransactions);
-    $('#transactionStatusFilter').addEventListener('change', renderTransactions);
+    // Busca com debounce: re-renderizar a tabela inteira a cada tecla travava
+    // o digitar em bases grandes (só renderiza 250ms depois do último caractere).
+    let searchDebounce = null;
+    $('#transactionSearch').addEventListener('input', () => {
+      clearTimeout(searchDebounce);
+      searchDebounce = setTimeout(() => renderTransactions({ resetPage: true }), 250);
+    });
+    // Qualquer mudança de filtro volta para a primeira página
+    $('#transactionTypeFilter').addEventListener('change', () => renderTransactions({ resetPage: true }));
+    $('#transactionCategoryFilter').addEventListener('change', () => renderTransactions({ resetPage: true }));
+    $('#transactionMonthFilter').addEventListener('change', () => renderTransactions({ resetPage: true }));
+    $('#transactionStatusFilter').addEventListener('change', () => renderTransactions({ resetPage: true }));
+
+    // Paginação (delegação: o box é re-renderizado a cada render da tabela)
+    $('#transactionsPagination').addEventListener('click', (e) => {
+      const btn = e.target.closest('.page-btn');
+      if (!btn || btn.disabled) return;
+      const page = parseInt(btn.dataset.page, 10);
+      if (!Number.isInteger(page) || page < 1) return;
+      transactionsPage = page;
+      renderTransactions();
+      $('#transactionsTable').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
   }
 
   // --- Transaction Modal ---
@@ -2678,7 +2734,7 @@ const App = (() => {
       if (total === 0) {
         showToast('Bem-vindo! Comece adicionando sua primeira transação.', 'warning', 4000);
       } else {
-        showToast(`Bem-vindo! Você tem ${total} transação${total !== 1 ? 'ões' : ''} registradas.`, 'success', 3000);
+        showToast(`Bem-vindo! Você tem ${total} transaç${total === 1 ? 'ão' : 'ões'} registradas.`, 'success', 3000);
       }
     }, 500);
   }

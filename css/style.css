@@ -976,10 +976,72 @@ table {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: var(--space-md);
+  flex-wrap: wrap;
   padding: var(--space-md);
   font-size: 0.875rem;
   color: var(--color-text-secondary);
   border-top: 1px solid var(--color-border-light);
+}
+
+/* --- Totais da tabela de transações (entradas / saídas / saldo) --- */
+.table-totals {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+}
+
+.totals-item b { font-weight: 700; }
+.totals-item--income b { color: var(--color-income); }
+.totals-item--expense b { color: var(--color-expense); }
+
+/* --- Paginação da tabela de transações --- */
+.pagination {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.pagination .page-info {
+  white-space: nowrap;
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary);
+}
+
+.page-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text);
+  font-size: 0.9375rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.page-btn:hover:not(:disabled) {
+  background: var(--color-bg);
+  border-color: var(--color-primary);
+}
+
+.page-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+@media (max-width: 640px) {
+  .table-footer {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-sm);
+  }
 }
 
 /* --- Categories Grid --- */
