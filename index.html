@@ -457,6 +457,18 @@
                   Converse com uma IA que <strong>consulta suas contas de verdade</strong> por ferramentas
                   (function calling). Suas transações não saem do aparelho — só um resumo vai ao provedor.
                 </p>
+                <div id="aiMobileBanner" class="ai-mobile-banner" hidden>
+                  <i class="fas fa-circle-info" aria-hidden="true"></i>
+                  <span class="ai-mobile-banner-text">
+                    <strong>No celular, o Ollama não funciona</strong> (ele roda no computador).
+                    Para o chat funcionar aqui, escolha <strong>Groq</strong> ou <strong>Gemini</strong>
+                    (grátis) e cole sua chave.
+                  </span>
+                  <button type="button" id="aiBannerConfig" class="btn btn-primary btn-sm">Configurar</button>
+                  <button type="button" id="aiBannerClose" class="btn-icon" title="Fechar aviso" aria-label="Fechar aviso">
+                    <i class="fas fa-xmark"></i>
+                  </button>
+                </div>
                 <div id="aiChatMessages" class="ai-chat-messages"></div>
                 <div id="aiSuggestions" class="ai-suggestions">
                   <button type="button" class="ai-chip" data-ai-prompt="Pra onde foi meu dinheiro este mês?">Pra onde foi meu dinheiro?</button>

@@ -1,4 +1,4 @@
-// Harness de fluxo — chat IA (12 checks).
+// Harness de fluxo — chat IA (18 checks).
 // Rode com: node tests/harness/flow2.js   (ou: npm run test:harness)
 const fs = require('fs');
 const path = require('path');
@@ -122,6 +122,24 @@ const check = (name, cond, detail) => results.push(`${cond ? 'PASS' : 'FAIL'} �
   check('status limpo após erro', w.document.getElementById('aiChatStatus').textContent === '');
   const realErrors = errors.filter((e) => !e.includes('no-canvas'));
   check('nenhum erro de runtime não tratado', realErrors.length === 0, realErrors.join(' ; ').slice(0, 200));
+
+  // (e) banner mobile: oculto no desktop; visível com override mobile + ollama; some com groq
+  const banner = w.document.getElementById('aiMobileBanner');
+  check('banner mobile oculto no desktop', !!(banner && banner.hasAttribute('hidden')));
+  w.__aiDeviceMobile = true;
+  const navOther = [...w.document.querySelectorAll('.nav-item')].find((n) => n.dataset.page && n.dataset.page !== 'assistente');
+  if (navOther) navOther.click();
+  await sleep(80);
+  if (navItem) navItem.click();
+  await sleep(80);
+  check('banner mobile visível com ollama', !!(banner && !banner.hasAttribute('hidden')));
+  w.localStorage.setItem('financas_ai_config', JSON.stringify({ provider: 'groq', apiKey: 'x', messages: [] }));
+  if (navOther) navOther.click();
+  await sleep(80);
+  if (navItem) navItem.click();
+  await sleep(80);
+  check('banner mobile oculto com groq', !!(banner && banner.hasAttribute('hidden')));
+  w.localStorage.setItem('financas_ai_config', JSON.stringify({ provider: 'ollama', messages: [] }));
 
   console.log(results.join('\n'));
   const fails = results.filter((r) => r.startsWith('FAIL')).length;

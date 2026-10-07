@@ -2960,6 +2960,11 @@ const App = (() => {
     $('#aiSettingsBtn').addEventListener('click', () => openAISettings());
     $('#aiKeyToggle').addEventListener('click', toggleAIKey);
     if ($('#aiTestBtn')) $('#aiTestBtn').addEventListener('click', testAIConnection);
+    if ($('#aiBannerConfig')) $('#aiBannerConfig').addEventListener('click', () => openAISettings());
+    if ($('#aiBannerClose')) $('#aiBannerClose').addEventListener('click', () => {
+      try { localStorage.setItem('financas_ai_banner_dismissed', '1'); } catch (e) {}
+      var b = $('#aiMobileBanner'); if (b) b.setAttribute('hidden', '');
+    });
     $('#aiSettingsForm').addEventListener('submit', (e) => {
       e.preventDefault();
       saveAISettings();
@@ -3146,6 +3151,24 @@ const App = (() => {
     badge.textContent = label;
   }
 
+  function isMobileDevice() {
+    if (typeof window !== 'undefined' && window.__aiDeviceMobile === true) return true;
+    if (typeof navigator === 'undefined') return false;
+    return /Mobi|Android|iPhone|iPad|iPod|Silk|Kindle/i.test(navigator.userAgent || '') || (navigator.maxTouchPoints || 0) > 1;
+  }
+
+  function renderAIMobileBanner() {
+    var banner = document.getElementById('aiMobileBanner');
+    if (!banner) return;
+    var cfg = getAIConfig({ provider: 'ollama' });
+    var show = isMobileDevice() && cfg.provider === 'ollama';
+    if (show) {
+      try { if (localStorage.getItem('financas_ai_banner_dismissed')) show = false; } catch (e) {}
+    }
+    if (show) banner.removeAttribute('hidden');
+    else banner.setAttribute('hidden', '');
+  }
+
   function renderAIChat() {
     var box = document.getElementById('aiChatMessages');
     if (!box) return;
@@ -3165,6 +3188,7 @@ const App = (() => {
     }
     box.scrollTop = box.scrollHeight;
     updateAIProviderBadge();
+    renderAIMobileBanner();
   }
 
   function pushAIMessage(role, content, error) {
@@ -3183,6 +3207,9 @@ const App = (() => {
     var txt = '';
     if (window.AI && typeof AI.getProvider === 'function') {
       var p = AI.getProvider(id); if (p) txt = p.hint || '';
+    }
+    if (id === 'ollama' && isMobileDevice()) {
+      txt = (txt ? txt + ' ' : '') + 'Este provedor n\u00e3o funciona no celular \u2014 escolha Groq ou Gemini (gr\u00e1tis).';
     }
     hint.textContent = txt;
   }
@@ -3278,11 +3305,17 @@ const App = (() => {
     var m = String((e && e.message) || e);
     var isOllama = provider === 'ollama';
     if (/tempo esgotado|timed ?out|abort/i.test(m)) {
+      if (isOllama && isMobileDevice()) {
+        return 'O Ollama demorou para responder no celular, onde ele n\u00e3o roda. Use Groq ou Gemini (gr\u00e1tis) \u2014 chave em \u2699\ufe0f Configurar.';
+      }
       return 'O provedor demorou demais e a chamada foi cancelada. '
         + (isOllama ? 'Confira se o Ollama está aberto e com o modelo carregado; depois tente de novo.'
             : 'Verifique o provedor em Configurar e tente de novo.');
     }
     if (/failed to fetch|networkerror|connection refused|err_connection|fetch failed|load failed|net::|network request failed/i.test(m)) {
+      if (isOllama && isMobileDevice()) {
+        return 'N\u00e3o consegui conectar com o provedor. O Ollama roda no seu computador, n\u00e3o no celular \u2014 escolha Groq ou Gemini (gr\u00e1tis) em \u2699\ufe0f Configurar e cole a chave.';
+      }
       return 'N\u00e3o consegui conectar com o provedor. '
         + (isOllama ? 'Se o Ollama n\u00e3o est\u00e1 rodando, abra-o (ollama serve) e tente de novo.'
             : 'Revise o provedor, a URL base e a chave em Configurar.');

@@ -3144,6 +3144,47 @@ tr.row-selected,
   margin-bottom: var(--space-md, 16px);
 }
 
+/* Aviso "Ollama não funciona no celular" (provedor local em dispositivo móvel) */
+.ai-mobile-banner[hidden] {
+  display: none;
+}
+
+.ai-mobile-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm, 8px) var(--space-md, 12px);
+  flex-wrap: wrap;
+  background: var(--color-warning-bg, #fef3c7);
+  border: 1px solid var(--color-warning, #f59e0b);
+  border-radius: var(--radius-sm, 8px);
+  padding: var(--space-sm, 8px) var(--space-md, 12px);
+  margin-bottom: var(--space-md, 12px);
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: var(--color-text, #111827);
+}
+
+.ai-mobile-banner > i {
+  color: var(--color-warning, #f59e0b);
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+
+.ai-mobile-banner-text {
+  flex: 1;
+  min-width: 200px;
+}
+
+.ai-mobile-banner .btn {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.ai-mobile-banner .btn-icon {
+  flex-shrink: 0;
+  color: var(--text-muted, #6b7280);
+}
+
 .ai-chat-messages {
   display: flex;
   flex-direction: column;
