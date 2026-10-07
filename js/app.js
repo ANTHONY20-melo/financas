@@ -2973,6 +2973,7 @@ const App = (() => {
       $('#aiProvider').addEventListener('change', () => {
         updateAIProviderHint();
         updateAIKeyVisibility();
+        refillAIProviderDefaults();
       });
     }
 
@@ -3120,6 +3121,16 @@ const App = (() => {
       var raw = localStorage.getItem(AI_CONFIG_KEY);
       if (!raw) return defaults;
       var parsed = JSON.parse(raw);
+      // Auto-corre\u00e7\u00e3o: modelos removidos pelos provedores (ex.: a Groq
+      // excluiu llama-3.3-70b-versatile — HTTP 404). Se o config salvo ainda
+      // aponta pra um modelo morto, limpa o campo pra voltar ao padr\u00e3o
+      // atual do app e j\u00e1 regrava (conserta o aparelho sem a\u00e7\u00e3o manual).
+      var deadModels = { groq: ['llama-3.3-70b-versatile'] };
+      var deadList = (parsed && deadModels[parsed.provider]) || null;
+      if (deadList && parsed.model && deadList.indexOf(parsed.model) !== -1) {
+        delete parsed.model;
+        try { localStorage.setItem(AI_CONFIG_KEY, JSON.stringify(parsed)); } catch (e) {}
+      }
       return Object.assign({}, defaults, parsed);
     } catch (e) {
       return defaults;
@@ -3211,7 +3222,12 @@ const App = (() => {
     if (id === 'ollama' && isMobileDevice()) {
       txt = (txt ? txt + ' ' : '') + 'Este provedor n\u00e3o funciona no celular \u2014 escolha Groq ou Gemini (gr\u00e1tis).';
     }
-    hint.textContent = txt;
+    var defaultInfo = '';
+    if (window.AI && typeof AI.getProvider === 'function') {
+      var p0 = AI.getProvider(id);
+      if (p0) defaultInfo = ' Padr\u00e3o: ' + p0.model + ' \u00b7 ' + p0.baseUrl;
+    }
+    hint.textContent = txt + defaultInfo;
   }
 
   function updateAIKeyVisibility() {
@@ -3233,6 +3249,19 @@ const App = (() => {
     if (icon) icon.className = input.type === 'text' ? 'fas fa-eye-slash' : 'fas fa-eye';
   }
 
+  // Padr\u00f5es do provedor selecionado (usado ao trocar provider no modal).
+  var aiPresetBefore = null;
+  function refillAIProviderDefaults() {
+    var sel = document.getElementById('aiProvider'); if (!sel) return;
+    var next = (window.AI && typeof AI.getProvider === 'function') ? AI.getProvider(sel.value) : null;
+    var prev = aiPresetBefore; aiPresetBefore = next;
+    if (!prev || !next) return;
+    var m = document.getElementById('aiModel');
+    if (m && (!m.value.trim() || m.value.trim() === prev.model)) m.value = next.model || '';
+    var u = document.getElementById('aiBaseUrl');
+    if (u && (!u.value.trim() || u.value.trim() === prev.baseUrl)) u.value = next.baseUrl || '';
+  }
+
   function openAISettings() {
     var cfg = getAIConfig({provider:'ollama', model:'', apiKey:'', baseUrl:''});
     var sel = document.getElementById('aiProvider');
@@ -3242,9 +3271,11 @@ const App = (() => {
       sel.innerHTML = html;
     }
     if (sel) sel.value = cfg.provider || 'ollama';
-    if (document.getElementById('aiModel')) document.getElementById('aiModel').value = cfg.model || '';
+    var preset = (window.AI && typeof AI.getProvider === 'function') ? AI.getProvider(sel ? sel.value : 'ollama') : null;
+    aiPresetBefore = preset;
+    if (document.getElementById('aiModel')) document.getElementById('aiModel').value = cfg.model || (preset && preset.model) || '';
     if (document.getElementById('aiApiKey')) document.getElementById('aiApiKey').value = cfg.apiKey || '';
-    if (document.getElementById('aiBaseUrl')) document.getElementById('aiBaseUrl').value = cfg.baseUrl || '';
+    if (document.getElementById('aiBaseUrl')) document.getElementById('aiBaseUrl').value = cfg.baseUrl || (preset && preset.baseUrl) || '';
     updateAIProviderHint(); updateAIKeyVisibility();
     if (typeof openModal === 'function') openModal('aiSettingsModal');
   }
@@ -3321,7 +3352,12 @@ const App = (() => {
             : 'Revise o provedor, a URL base e a chave em Configurar.');
     }
     if (/401|403/.test(m)) return 'O provedor recusou a chamada (HTTP 401/403). Confira sua chave de API em Configurar.';
-    if (/404/.test(m)) return 'Endpoint do provedor n\u00e3o encontrado (HTTP 404). Confira a URL base em Configurar.';
+    if (/404/.test(m)) {
+      if (provider === 'groq') {
+        return 'HTTP 404: a Groq n\u00e3o achou o modelo. Apague o campo Modelo (vazio = usa o padr\u00e3o atualizado: openai/gpt-oss-20b) e teste de novo.';
+      }
+      return 'Endpoint do provedor n\u00e3o encontrado (HTTP 404). Confira a URL base em Configurar.';
+    }
     if (/429/.test(m)) return 'Limite de uso do provedor atingido (HTTP 429). Espere um pouco e tente de novo.';
     return m;
   }

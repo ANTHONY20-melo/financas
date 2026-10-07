@@ -1,4 +1,4 @@
-// Harness de fluxo — chat IA (18 checks).
+// Harness de fluxo — chat IA (21 checks).
 // Rode com: node tests/harness/flow2.js   (ou: npm run test:harness)
 const fs = require('fs');
 const path = require('path');
@@ -69,6 +69,16 @@ const check = (name, cond, detail) => results.push(`${cond ? 'PASS' : 'FAIL'} �
   check('histórico renderizado (2 msgs, erro excluído do visual? não — deve aparecer)', box.querySelectorAll('.ai-msg').length >= 2, `children=${box.querySelectorAll('.ai-msg').length}`);
   check('HTML da IA escapado (sem <script> cru)', !htmlRendered.includes('<script>alert'), htmlRendered.includes('&lt;script&gt;') ? 'escapado ok' : htmlRendered.slice(0, 120));
 
+  // (a2) auto-correção: modelo morto da Groq (404) some do config salvo ao carregar
+  w.localStorage.setItem('financas_ai_config', JSON.stringify({ provider: 'groq', model: 'llama-3.3-70b-versatile', apiKey: '', baseUrl: '', messages: [] }));
+  const navDash = [...w.document.querySelectorAll('.nav-item')].find((n) => n.dataset.page === 'dashboard');
+  if (navDash) navDash.click();
+  await sleep(60);
+  if (navItem) navItem.click();
+  await sleep(60);
+  const cfgAfterSan = JSON.parse(w.localStorage.getItem('financas_ai_config'));
+  check('modelo morto da Groq é limpo do config salvo', cfgAfterSan && cfgAfterSan.model !== 'llama-3.3-70b-versatile' && (cfgAfterSan.model || '') === '', JSON.stringify(cfgAfterSan));
+
   // (b) modal de config abre
   const settingsBtn = w.document.getElementById('aiSettingsBtn');
   check('botão de config da IA existe', !!settingsBtn);
@@ -76,6 +86,10 @@ const check = (name, cond, detail) => results.push(`${cond ? 'PASS' : 'FAIL'} �
   await sleep(50);
   const modal = w.document.getElementById('aiSettingsModal');
   check('modal de config ABRE', !!(modal && modal.classList.contains('open')), `classes=${modal && modal.className}`);
+  const modelInput = w.document.getElementById('aiModel');
+  const urlInput = w.document.getElementById('aiBaseUrl');
+  check('modal pré-preenche modelo padrão (Groq gpt-oss-20b)', modelInput && modelInput.value === 'openai/gpt-oss-20b', modelInput && modelInput.value);
+  check('modal pré-preenche URL padrão (Groq)', urlInput && urlInput.value === 'https://api.groq.com/openai/v1', urlInput && urlInput.value);
 
   // (b2) botão "Testar conexão" → sucesso com o fetch stub ok
   const testBtn = w.document.getElementById('aiTestBtn');
