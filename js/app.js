@@ -52,16 +52,33 @@ const App = (() => {
   }
 
   function getMonthOptions() {
-    const months = [];
+    // Inclui TODOS os meses com lanÃ§amentos no histÃ³rico + os Ãºltimos 12 meses (para meses futuros/vazios)
+    const keys = new Map();
+    try {
+      const all = DB.getTransactions() || [];
+      all.forEach((t) => {
+        if (t && t.date && typeof t.date === 'string' && t.date.length >= 7) {
+          keys.set(t.date.slice(0, 7), true);
+        }
+      });
+    } catch (e) { /* DB ainda nÃ£o pronto */ }
+
     const d = new Date();
     for (let i = 0; i < 12; i++) {
       const m = new Date(d.getFullYear(), d.getMonth() - i, 1);
-      months.push({
-        value: `${m.getFullYear()}-${String(m.getMonth() + 1).padStart(2, '0')}`,
-        label: m.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }),
-      });
+      keys.set(`${m.getFullYear()}-${String(m.getMonth() + 1).padStart(2, '0')}`, true);
     }
-    return months;
+
+    return Array.from(keys.keys())
+      .sort()
+      .reverse()
+      .map((value) => {
+        const [y, m] = value.split('-').map(Number);
+        return {
+          value,
+          label: new Date(y, m - 1, 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }),
+        };
+      });
   }
 
   function generateId() {
@@ -2684,7 +2701,7 @@ document.addEventListener('DOMContentLoaded', () => {
   App.init();
 });
   // ==========================================
-  // ASSISTENTE IA (LLM) — UI
+  // ASSISTENTE IA (LLM) ï¿½ UI
   // ==========================================
 
   const AI_CONFIG_KEY = 'financas_ai_config';
@@ -2732,7 +2749,7 @@ document.addEventListener('DOMContentLoaded', () => {
     var cfg = getAIConfig({messages:[]});
     var msgs = Array.isArray(cfg.messages) ? cfg.messages : [];
     if (msgs.length === 0) {
-      box.innerHTML = '<p class=\"ai-empty\">Converse com o assistente IA. Pergunte o que quiser sobre suas finanças.</p>';
+      box.innerHTML = '<p class=\"ai-empty\">Converse com o assistente IA. Pergunte o que quiser sobre suas finanï¿½as.</p>';
     } else {
       var html = '';
       for (var i = 0; i < msgs.length; i++) {
@@ -2810,7 +2827,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (document.getElementById('aiBaseUrl')) cfg.baseUrl = document.getElementById('aiBaseUrl').value.trim();
     setAIConfig(cfg); updateAIProviderBadge();
     if (typeof closeModal === 'function') closeModal('aiSettingsModal');
-    if (typeof showToast === 'function') showToast('Configurações do assistente IA salvas!', 'success');
+    if (typeof showToast === 'function') showToast('Configuraï¿½ï¿½es do assistente IA salvas!', 'success');
     renderAIChat();
   }
 
@@ -2832,7 +2849,7 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (e) {
       var msg = e&&e.message?e.message:'Erro ao chamar a IA.';
       pushAIMessage('assistant','Erro: '+msg,true); renderAIChat();
-      if (typeof showToast==='function') showToast('Não foi possível conversar com a IA.','error');
+      if (typeof showToast==='function') showToast('Nï¿½o foi possï¿½vel conversar com a IA.','error');
     } finally {
       btn.disabled=false; if (status) status.textContent=''; input.focus();
     }

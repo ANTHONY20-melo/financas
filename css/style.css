@@ -1,4 +1,4 @@
-/* ============================================
+﻿/* ============================================
    FINANÃAS PESSOAIS - Sexta Feira
    Design System & Styles
    ============================================ */
@@ -2919,10 +2919,34 @@ table {
 
 
 
-/* Sexta: aba Assistente = apenas chat IA (esconde os demais blocos) */
+/* Sexta: aba Assistente = apenas chat IA em tela cheia */
 #page-assistente .page-toolbar,
 #page-assistente .assistant-alerts,
 #page-assistente .assistant-stats,
 #page-assistente .assistant-grid > .card:not(.ai-card) { display: none !important; }
-#page-assistente .assistant-grid { display: block; }
+
+#page-assistente .assistant-grid {
+  display: block !important;
+  grid-template-columns: none;
+}
+
+#page-assistente .ai-card {
+  margin: 0;
+}
+
+#page-assistente .ai-card .card-body {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100vh - 320px);
+}
+
+#page-assistente .ai-chat-messages {
+  flex: 1;
+  max-height: none !important;
+  min-height: 320px;
+}
+
+#page-assistente .ai-chat-input {
+  margin-top: auto;
+}
 
