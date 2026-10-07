@@ -343,3 +343,24 @@ test('chat propaga erro HTTP do provedor', async () => {
     /HTTP 401/
   );
 });
+
+test('chat respeita timeoutMs e reporta tempo esgotado em vez de travar', async () => {
+  let aborted = false;
+  // fetch que nunca resolve (simula provedor travado) e rejeita no abort do sinal
+  const fetchImpl = (_url, opts) =>
+    new Promise((_resolve, reject) => {
+      if (opts && opts.signal) {
+        opts.signal.addEventListener('abort', () => {
+          aborted = true;
+          const err = new Error('Aborted');
+          err.name = 'AbortError';
+          reject(err);
+        });
+      }
+    });
+  await assert.rejects(
+    () => AI.chat({ provider: 'ollama', db: DB, messages: [{ role: 'user', content: 'oi' }], fetch: fetchImpl, timeoutMs: 50 }),
+    /Tempo esgotado/
+  );
+  assert.equal(aborted, true);
+});

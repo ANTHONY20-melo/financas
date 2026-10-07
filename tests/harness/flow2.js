@@ -77,6 +77,17 @@ const check = (name, cond, detail) => results.push(`${cond ? 'PASS' : 'FAIL'} �
   const modal = w.document.getElementById('aiSettingsModal');
   check('modal de config ABRE', !!(modal && modal.classList.contains('open')), `classes=${modal && modal.className}`);
 
+  // (b2) botão "Testar conexão" → sucesso com o fetch stub ok
+  const testBtn = w.document.getElementById('aiTestBtn');
+  check('botão Testar conexão existe', !!testBtn);
+  if (testBtn) {
+    testBtn.click();
+    await sleep(300);
+    const testRes = w.document.getElementById('aiTestResult');
+    check('Testar conexão: resultado de sucesso', !!testRes && /Conectado/.test(testRes.textContent), testRes && testRes.textContent);
+    check('Testar conexão: botão reabilitado', testBtn.disabled === false);
+  }
+
   // fecha modal
   const closeBtn = modal && modal.querySelector('.modal-close');
   if (closeBtn) closeBtn.click();

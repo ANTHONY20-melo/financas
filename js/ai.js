@@ -683,20 +683,44 @@ const AI = (() => {
     }));
   }
 
-  async function callProvider(provider, messages, tools, fetchImpl) {
-    const req = provider.buildRequest(messages, tools);
-    const res = await fetchImpl(req.url, req.options);
-    if (!res || typeof res.ok !== 'boolean' || !res.ok) {
-      let detail = '';
-      try {
-        detail = await res.text();
-      } catch {
-        /* sem corpo */
-      }
-      throw new Error(`HTTP ${res && res.status}${detail ? ': ' + String(detail).slice(0, 200) : ''}`);
+  async function callProvider(provider, messages, tools, fetchImpl, timeoutMs) {
+    // Timeout: sem isso, um provedor lento/travado deixava o chat preso em
+    // "Pensando..." para sempre (nenhum abort era acionado no fetch).
+    let controller = null;
+    let timer = null;
+    if (timeoutMs > 0 && typeof AbortController !== 'undefined') {
+      controller = new AbortController();
+      timer = setTimeout(() => controller.abort(), timeoutMs);
     }
-    const json = await res.json();
-    return provider.parseResponse(json);
+    try {
+      const req = provider.buildRequest(messages, tools);
+      const options = controller ? Object.assign({}, req.options, { signal: controller.signal }) : req.options;
+      let res;
+      try {
+        res = await fetchImpl(req.url, options);
+      } catch (e) {
+        if (controller && controller.signal.aborted) {
+          throw new Error(
+            `Tempo esgotado: o provedor não respondeu em ${Math.ceil(timeoutMs / 1000)}s. ` +
+            'Verifique se ele está no ar e tente de novo.'
+          );
+        }
+        throw e;
+      }
+      if (!res || typeof res.ok !== 'boolean' || !res.ok) {
+        let detail = '';
+        try {
+          detail = await res.text();
+        } catch {
+          /* sem corpo */
+        }
+        throw new Error(`HTTP ${res && res.status}${detail ? ': ' + String(detail).slice(0, 200) : ''}`);
+      }
+      const json = await res.json();
+      return provider.parseResponse(json);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
   }
 
   // ── Chat (orquestra o loop de function calling) ────────────────
@@ -708,6 +732,7 @@ const AI = (() => {
     const provider = createProvider(cfg);
     const tools = cfg.tools === false ? [] : getToolDefs();
     const maxRounds = Number.isInteger(cfg.maxRounds) ? cfg.maxRounds : 4;
+    const timeoutMs = Number.isFinite(cfg.timeoutMs) && cfg.timeoutMs > 0 ? cfg.timeoutMs : 90000;
 
     const messages = [];
     if (cfg.system !== false) {
@@ -726,7 +751,7 @@ const AI = (() => {
 
     for (let round = 0; round < maxRounds; round++) {
       rounds = round + 1;
-      const res = await callProvider(provider, messages, tools, fetchImpl);
+      const res = await callProvider(provider, messages, tools, fetchImpl, timeoutMs);
       if (res.text) lastText = res.text;
       if (!res.toolCalls.length) {
         return { ok: true, provider: provider.name, model: provider.model, text: res.text || '', messages, trace, rounds };
@@ -741,7 +766,7 @@ const AI = (() => {
     }
 
     // Estourou as rodadas: pede uma resposta final sem ferramentas
-    const final = await callProvider(provider, messages, [], fetchImpl);
+    const final = await callProvider(provider, messages, [], fetchImpl, timeoutMs);
     return {
       ok: true,
       provider: provider.name,

@@ -665,6 +665,17 @@ table {
   cursor: pointer;
 }
 
+/* Resultado do "Testar conexão" no modal do assistente IA */
+.ai-test-result.is-ok {
+  color: var(--color-success, #2e7d32);
+  font-weight: 600;
+}
+
+.ai-test-result.is-err {
+  color: var(--color-expense, #c62828);
+  font-weight: 600;
+}
+
 /* --- Dashboard Grid --- */
 .dashboard-grid {
   display: grid;
@@ -1109,15 +1120,50 @@ th.sortable.sorted .fa-sort-down {
 
 /* --- Seleção em massa --- */
 .col-select {
-  width: 40px;
+  width: 48px;
   text-align: center;
 }
 
-.col-select input {
-  width: 16px;
-  height: 16px;
-  accent-color: var(--color-primary);
+.col-select input[type="checkbox"] {
+  -webkit-appearance: none;
+  appearance: none;
+  display: inline-block;
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  border: 2px solid var(--color-border-strong, #b9bfc9);
+  border-radius: 6px;
+  background: var(--color-surface, #fff);
   cursor: pointer;
+  vertical-align: middle;
+  position: relative;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.col-select input[type="checkbox"]:hover {
+  border-color: var(--color-primary);
+}
+
+.col-select input[type="checkbox"]:checked {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+.col-select input[type="checkbox"]:checked::after {
+  content: '';
+  position: absolute;
+  left: 6px;
+  top: 2px;
+  width: 6px;
+  height: 11px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.col-select input[type="checkbox"]:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 tr.row-selected,
@@ -1289,7 +1335,7 @@ tr.row-selected,
   }
 
   #transactionsTable tbody td[data-label='Descrição'] {
-    padding-right: 34px; /* espaço para o checkbox no canto */
+    padding-right: 40px; /* espaço para o checkbox no canto */
     justify-content: flex-start;
     flex-wrap: wrap;
   }

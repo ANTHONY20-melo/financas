@@ -13,7 +13,15 @@ const ROOT = path.join(__dirname, '..', '..');
 const aiCode = fs.readFileSync(path.join(ROOT, 'js', 'ai.js'), 'utf-8');
 
 function loadAI() {
-  const sandbox = { console };
+  // VM realm mínimo: o módulo é puro (sem DOM), mas usa timers e AbortController
+  // para o timeout do chat — precisa estar disponível no sandbox do teste.
+  const sandbox = {
+    console,
+    setTimeout,
+    clearTimeout,
+    AbortController,
+    AbortSignal,
+  };
   vm.createContext(sandbox);
   vm.runInContext(aiCode, sandbox, { filename: 'ai.js' });
   return vm.runInContext('AI', sandbox);

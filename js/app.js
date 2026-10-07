@@ -2959,6 +2959,7 @@ const App = (() => {
     });
     $('#aiSettingsBtn').addEventListener('click', () => openAISettings());
     $('#aiKeyToggle').addEventListener('click', toggleAIKey);
+    if ($('#aiTestBtn')) $('#aiTestBtn').addEventListener('click', testAIConnection);
     $('#aiSettingsForm').addEventListener('submit', (e) => {
       e.preventDefault();
       saveAISettings();
@@ -3233,6 +3234,65 @@ const App = (() => {
     renderAIChat();
   }
 
+  async function testAIConnection() {
+    var btn = document.getElementById('aiTestBtn');
+    var result = document.getElementById('aiTestResult');
+    if (!btn || !result) return;
+    if (!window.AI || typeof AI.chat !== 'function') {
+      result.textContent = 'M\u00f3dulo de IA n\u00e3o carregado (js/ai.js). Atualize a p\u00e1gina.';
+      result.className = 'form-hint ai-test-result is-err';
+      return;
+    }
+    var provider = (document.getElementById('aiProvider') || {}).value || 'ollama';
+    var model = (document.getElementById('aiModel') || {}).value;
+    var apiKey = (document.getElementById('aiApiKey') || {}).value || '';
+    var baseUrl = (document.getElementById('aiBaseUrl') || {}).value || '';
+    var cfg = {
+      provider: provider,
+      model: model || undefined,
+      apiKey: apiKey || undefined,
+      baseUrl: baseUrl || undefined,
+      db: window.DB,
+      fetch: window.fetch,
+      messages: [{ role: 'user', content: 'Responda apenas com "ok".' }],
+      tools: false,
+      timeoutMs: 15000,
+    };
+    btn.disabled = true;
+    result.textContent = 'Testando...';
+    result.className = 'form-hint ai-test-result';
+    try {
+      var r = await AI.chat(cfg);
+      var reply = (r && r.text ? r.text : 'ok').trim().slice(0, 60);
+      result.textContent = 'Conectado com sucesso. Resposta: ' + reply;
+      result.className = 'form-hint ai-test-result is-ok';
+    } catch (e) {
+      result.textContent = 'Falha: ' + friendlyAIError(e, provider);
+      result.className = 'form-hint ai-test-result is-err';
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  function friendlyAIError(e, provider) {
+    var m = String((e && e.message) || e);
+    var isOllama = provider === 'ollama';
+    if (/tempo esgotado|timed ?out|abort/i.test(m)) {
+      return 'O provedor demorou demais e a chamada foi cancelada. '
+        + (isOllama ? 'Confira se o Ollama está aberto e com o modelo carregado; depois tente de novo.'
+            : 'Verifique o provedor em Configurar e tente de novo.');
+    }
+    if (/failed to fetch|networkerror|connection refused|err_connection|fetch failed|load failed|net::|network request failed/i.test(m)) {
+      return 'N\u00e3o consegui conectar com o provedor. '
+        + (isOllama ? 'Se o Ollama n\u00e3o est\u00e1 rodando, abra-o (ollama serve) e tente de novo.'
+            : 'Revise o provedor, a URL base e a chave em Configurar.');
+    }
+    if (/401|403/.test(m)) return 'O provedor recusou a chamada (HTTP 401/403). Confira sua chave de API em Configurar.';
+    if (/404/.test(m)) return 'Endpoint do provedor n\u00e3o encontrado (HTTP 404). Confira a URL base em Configurar.';
+    if (/429/.test(m)) return 'Limite de uso do provedor atingido (HTTP 429). Espere um pouco e tente de novo.';
+    return m;
+  }
+
   async function handleAIChatSubmit() {
     var input = document.getElementById('aiChatInput');
     var btn = document.getElementById('aiChatSend');
@@ -3255,8 +3315,8 @@ const App = (() => {
       pushAIMessage('assistant', reply); renderAIChat();
       if (window.Sync && typeof Sync.markDirty === 'function') Sync.markDirty();
     } catch (e) {
-      var msg = e&&e.message?e.message:'Erro ao chamar a IA.';
-      pushAIMessage('assistant','Erro: '+msg,true); renderAIChat();
+      var msg = friendlyAIError(e, cfg ? cfg.provider : '');
+      pushAIMessage('assistant', 'Erro: ' + msg, true); renderAIChat();
       if (typeof showToast==='function') showToast('N�o foi poss�vel conversar com a IA.','error');
     } finally {
       btn.disabled=false; if (status) status.textContent=''; input.focus();
