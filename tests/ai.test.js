@@ -75,7 +75,7 @@ test('buildContext agrega receitas, despesas, categorias e metas', () => {
 test('buildSystemPrompt inclui o mês de referência e valores', () => {
   seed();
   const prompt = AI.buildSystemPrompt(AI.buildContext(DB));
-  assert.match(prompt, /JARVIS/);
+  assert.match(prompt, /Assistente Financeiro/);
   assert.match(prompt, /Mês de referência/);
   assert.match(prompt, /Receitas do mês/);
 });

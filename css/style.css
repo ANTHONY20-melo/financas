@@ -2917,3 +2917,12 @@ table {
 @media (max-width: 640px) { .ai-card .card-header { flex-direction: column; align-items: flex-start; } .ai-header-top { gap: var(--space-xs, 4px); } .ai-provider-badge { max-width: 140px; } .ai-chat-messages { max-height: 260px; } .ai-chat-input { gap: var(--space-xs, 4px); } .ai-suggestions { gap: var(--space-xs, 4px); } .ai-chip { font-size: 0.72rem; padding: 4px 10px; } }
 @media (max-width: 420px) { .ai-provider-badge { max-width: 110px; font-size: 0.68rem; } .ai-chat-messages { max-height: 220px; } .ai-msg { max-width: 95%; } }
 
+
+
+/* Sexta: aba Assistente = apenas chat IA (esconde os demais blocos) */
+#page-assistente .page-toolbar,
+#page-assistente .assistant-alerts,
+#page-assistente .assistant-stats,
+#page-assistente .assistant-grid > .card:not(.ai-card) { display: none !important; }
+#page-assistente .assistant-grid { display: block; }
+
