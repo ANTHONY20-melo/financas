@@ -4,7 +4,7 @@
    ============================================ */
 'use strict';
 
-const CACHE = 'financas-cache-v6';
+const CACHE = 'financas-cache-v7';
 
 const PRECACHE = [
   './',
